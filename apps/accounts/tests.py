@@ -34,3 +34,25 @@ class ParticipantProfileTests(TestCase):
             user = User.objects.get(username=username)
             self.assertTrue(user.check_password("initial-pass"))
             self.assertEqual(user.participant_profile.batch, batch)
+
+    def test_registration_page_is_linked_from_login(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertContains(response, reverse("accounts:register"))
+
+    def test_participant_can_register_and_get_default_batch(self):
+        batch = ExperimentBatch.objects.create(name="批次 A", is_active=True)
+
+        response = self.client.post(
+            reverse("accounts:register"),
+            {
+                "username": "new_participant",
+                "password1": "StrongPass12345",
+                "password2": "StrongPass12345",
+            },
+        )
+
+        user = User.objects.get(username="new_participant")
+        self.assertRedirects(response, reverse("accounts:profile_prompt"))
+        self.assertEqual(user.participant_profile.batch, batch)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
