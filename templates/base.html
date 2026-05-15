@@ -1,0 +1,35 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE|default:'zh-hans' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}答题网站{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'survey/css/site.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'survey:start' %}">答题网站</a>
+    <nav>
+      {% if user.is_authenticated %}
+        <a href="{% url 'accounts:profile_edit' %}">资料</a>
+        <form action="{% url 'logout' %}" method="post" class="inline">{% csrf_token %}<button type="submit">退出</button></form>
+      {% endif %}
+      <form action="{% url 'set_language' %}" method="post" class="inline">{% csrf_token %}
+        <input name="next" type="hidden" value="{{ request.get_full_path }}">
+        <select name="language" onchange="this.form.submit()">
+          <option value="zh-hans">中文</option>
+          <option value="en">English</option>
+        </select>
+      </form>
+    </nav>
+  </header>
+  <main class="shell">
+    {% for message in messages %}<p class="message">{{ message }}</p>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{% static 'survey/js/quality-events.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

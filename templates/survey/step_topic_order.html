@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<section class="panel">
+  <h1>话题排序</h1>
+  <p>{{ session.batch_snapshot.intro_zh }}</p>
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {{ form.ordered_topic_ids }}
+    <ol id="topic-list" class="sortable">
+      {% for topic in topics %}
+        <li draggable="true" data-topic-id="{{ topic.id }}">
+          <span>{{ topic.title }}</span>
+          <div class="row-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button></div>
+        </li>
+      {% endfor %}
+    </ol>
+    <button class="primary" type="submit">提交排序</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}"></script>{% endblock %}

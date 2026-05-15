@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<section class="panel">
+  <h1>写下你的想法</h1>
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {{ form.final_text }}
+    {{ form.input_method }}
+    {{ form.transcribe_model }}
+    <label>{{ form.was_edited }} 我编辑过转写文本</label>
+    <button type="button" data-recorder>录音转文字</button>
+    <button class="primary" type="submit">提交</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/recorder.js' %}"></script>{% endblock %}

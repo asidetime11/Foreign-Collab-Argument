@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel narrow">
+  <h1>请填写称呼/姓名</h1>
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="primary" type="submit">继续</button>
+  </form>
+</section>
+{% endblock %}

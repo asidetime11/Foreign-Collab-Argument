@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<section class="panel">
+  <h1>评分</h1>
+  <form method="post" class="stack rating-form">
+    {% csrf_token %}
+    {% for item in items %}
+      <fieldset class="rating" data-min="{{ item.min_value }}" data-max="{{ item.max_value }}">
+        <legend>{{ item.label_zh }}</legend>
+        <input type="hidden" name="item_{{ item.pk }}" required>
+        <div class="rating-buttons">
+          {% for value in "1234567" %}
+            <button type="button" data-value="{{ value }}">{{ value }}</button>
+          {% endfor %}
+        </div>
+      </fieldset>
+    {% endfor %}
+    <button class="primary" type="submit">提交</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/rating.js' %}"></script>{% endblock %}

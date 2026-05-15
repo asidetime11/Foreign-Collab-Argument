@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  {% if missing_batch %}
+    <h1>尚未分配实验批次</h1>
+    <p>请联系研究管理员为你的账号分配实验批次后再开始答题。</p>
+  {% endif %}
+</section>
+{% endblock %}

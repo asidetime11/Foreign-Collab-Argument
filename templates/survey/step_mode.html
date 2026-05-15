@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>选择 AI 模式</h1>
+  <form method="post" class="mode-grid">
+    {% csrf_token %}
+    {% for mode in modes %}
+      <button name="selected_mode" value="{{ mode.pk }}" type="submit">{{ mode.name_zh }}</button>
+    {% endfor %}
+    <button name="selected_mode" value="skip" type="submit">跳过</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="post-card">
+  <h1>{{ material.title }}</h1>
+  <p>{{ material.post_body }}</p>
+</section>
+<form method="post" class="stack">
+  {% csrf_token %}
+  <section class="comments">
+    {% for comment in material.comments %}
+      <article class="comment">
+        <img alt="" src="https://api.dicebear.com/8.x/thumbs/svg?seed={{ comment.avatar_seed }}">
+        <div>
+          <strong>{{ comment.author }}</strong><span>{{ comment.relative_time }} · {{ comment.like_count }} 赞</span>
+          <p>{{ comment.body }}</p>
+          <label><input type="radio" name="comment_{{ comment.id }}" value="none" checked> 无操作</label>
+          <label><input type="radio" name="comment_{{ comment.id }}" value="like"> 赞</label>
+          <label><input type="radio" name="comment_{{ comment.id }}" value="dislike"> 踩</label>
+        </div>
+      </article>
+    {% endfor %}
+  </section>
+  <button class="primary" type="submit">继续</button>
+</form>
+{% endblock %}

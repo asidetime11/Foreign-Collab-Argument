@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<section class="panel chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}">
+  <h1>AI 对话</h1>
+  <div id="chat-log" class="chat-log"></div>
+  <form id="chat-form">
+    {% csrf_token %}
+    <input name="message" autocomplete="off" placeholder="输入消息">
+    <button type="submit">发送</button>
+  </form>
+  <form method="post" class="stack">{% csrf_token %}<button class="primary" type="submit">提前结束</button></form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/chat.js' %}"></script>{% endblock %}
