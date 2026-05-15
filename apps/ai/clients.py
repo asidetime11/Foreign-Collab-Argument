@@ -1,8 +1,15 @@
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from openai import OpenAI
 
 
+def ensure_ai_configured():
+    if not settings.DUBRIFY_API_KEY:
+        raise ImproperlyConfigured("DUBRIFY_API_KEY is not configured. Please set it in .env before using AI chat or transcription.")
+
+
 def _client():
+    ensure_ai_configured()
     return OpenAI(api_key=settings.DUBRIFY_API_KEY, base_url=settings.DUBRIFY_BASE_URL)
 
 

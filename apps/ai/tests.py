@@ -1,9 +1,12 @@
 from unittest.mock import patch
 
+from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth.models import User
+from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
 
+from apps.ai.clients import ensure_ai_configured
 from apps.ai.prompts import build_system_prompt
 from apps.experiments.models import AIMode, ExperimentBatch
 from apps.survey.models import ConversationMessage, SurveySession, TopicRound
@@ -30,6 +33,11 @@ class PromptTests(TestCase):
 
 
 class AIViewTests(TestCase):
+    @override_settings(DUBRIFY_API_KEY="")
+    def test_missing_api_key_raises_clear_configuration_error(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "DUBRIFY_API_KEY"):
+            ensure_ai_configured()
+
     def test_chat_stream_saves_participant_and_assistant_messages(self):
         user = User.objects.create_user("p001", password="pass")
         batch = ExperimentBatch.objects.create(name="批次 A")
