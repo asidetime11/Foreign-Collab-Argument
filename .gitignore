@@ -7,7 +7,7 @@ htmlcov/
 db.sqlite3
 media/
 staticfiles/
-exports/
+/exports/
 .worktrees/
 .superpowers/
 runserver.*.log

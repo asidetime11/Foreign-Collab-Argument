@@ -6,12 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}协同论证平台{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'survey/css/site.css' %}?v=20260516-2">
+  <link rel="stylesheet" href="{% static 'survey/css/site.css' %}?v=20260516-3">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="{% url 'survey:start' %}">
-      <span class="brand-mark" aria-hidden="true">论</span>
       <span class="brand-text">协同论证平台</span>
     </a>
     <nav class="top-actions">

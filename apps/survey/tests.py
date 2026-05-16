@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from apps.accounts.models import ParticipantProfile
 from apps.experiments.models import AIMode, ExperimentBatch, ScaleItem, Topic
-from apps.survey.models import ConversationMessage, QualityEvent, SurveySession
+from apps.survey.models import CommentReaction, ConversationMessage, QualityEvent, SurveySession
 from apps.survey.services import current_step, get_or_create_session, submit_topic_order
 
 
@@ -149,7 +149,7 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("login"))
 
         self.assertContains(response, "协同论证平台")
-        self.assertContains(response, 'class="brand-mark"')
+        self.assertNotContains(response, 'class="brand-mark"')
         self.assertNotContains(response, "观点小任务")
         self.assertNotContains(response, "English")
         self.assertNotContains(response, 'name="language"')
@@ -209,6 +209,30 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, 'data-move="down"')
         self.assertContains(response, 'name="ordered_topic_ids"')
 
+    def test_topic_order_dragging_has_clear_feedback_and_autoscroll(self):
+        user, batch = self.create_ready_user(username="p_sort_drag")
+        for index in range(10):
+            Topic.objects.create(batch=batch, title_zh=f"话题 {index + 1}", position=index)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("survey:topic_order"))
+        script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "topic-order.js").read_text(encoding="utf-8")
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+        dragover_block = script.split('list.addEventListener("dragover"', 1)[1].split('list.addEventListener("dragleave"', 1)[0]
+
+        self.assertContains(response, 'data-drag-status')
+        self.assertIn("function updateAutoScroll", script)
+        self.assertIn("window.scrollBy", script)
+        self.assertIn('document.addEventListener("dragover"', script)
+        self.assertIn('document.addEventListener("drop"', script)
+        self.assertIn("let dragOverTarget = null", script)
+        self.assertIn("setDragOver(target)", dragover_block)
+        self.assertNotIn("sync();", dragover_block)
+        self.assertIn("dragging-active", script)
+        self.assertIn("drag-over", script)
+        self.assertIn(".topic-list.dragging-active", stylesheet)
+        self.assertIn(".topic-card.drag-over", stylesheet)
+
     def test_post_page_renders_optional_like_dislike_controls(self):
         self.create_round_for_step("post", username="p_post")
 
@@ -219,8 +243,8 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, 'class="reaction-button"', count=2)
         self.assertContains(response, 'data-reaction="like"')
         self.assertContains(response, 'data-reaction="dislike"')
-        self.assertContains(response, 'aria-label="赞 参与者 A 的评论"')
-        self.assertContains(response, 'aria-label="踩 参与者 A 的评论"')
+        self.assertContains(response, 'aria-label="赞 小兔 的评论"')
+        self.assertContains(response, 'aria-label="踩 小兔 的评论"')
         self.assertContains(response, 'class="comment-avatar"')
         self.assertContains(response, "survey/img/avatar")
         self.assertContains(response, "survey/img/like.png")
@@ -256,6 +280,87 @@ class SurveyViewTests(TestCase):
         avatar_files = re.findall(r"survey/img/(avatar\d+\.png)", content)
         self.assertEqual(len(avatar_files), 3)
         self.assertEqual(len(set(avatar_files)), 3)
+        self.assertNotIn("avatar4.png", avatar_files)
+
+    def test_post_page_uses_avatar_based_comment_names(self):
+        user, batch, session, round_obj = self.create_round_for_step("post", username="p_post_avatar_names")
+        round_obj.material_snapshot["comments"] = [
+            {
+                "id": 1,
+                "author": "周明",
+                "avatar_seed": "a",
+                "relative_time": "刚刚",
+                "like_count": 20,
+                "body_zh": "评论 1",
+            },
+            {
+                "id": 2,
+                "author": "周明",
+                "avatar_seed": "b",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 2",
+            },
+            {
+                "id": 3,
+                "author": "周明",
+                "avatar_seed": "c",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 3",
+            },
+            {
+                "id": 4,
+                "author": "周明",
+                "avatar_seed": "d",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 4",
+            },
+            {
+                "id": 5,
+                "author": "周明",
+                "avatar_seed": "e",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 5",
+            },
+            {
+                "id": 6,
+                "author": "周明",
+                "avatar_seed": "f",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 6",
+            },
+            {
+                "id": 7,
+                "author": "周明",
+                "avatar_seed": "g",
+                "relative_time": "刚刚",
+                "like_count": 18,
+                "body_zh": "评论 7",
+            },
+        ]
+        round_obj.save(update_fields=["material_snapshot"])
+
+        response = self.client.get(reverse("survey:post"))
+        content = response.content.decode("utf-8")
+
+        for name in ["小兔", "小鸭", "小狐", "小狮", "小橙", "小鹅", "小兔 2"]:
+            self.assertContains(response, f"<strong>{name}</strong>", html=True)
+        self.assertNotIn("avatar4.png", content)
+        self.assertNotContains(response, "<strong>周明</strong>", html=True)
+        self.assertNotContains(response, "<strong>周明 2</strong>", html=True)
+
+    def test_post_page_saves_comment_interactions(self):
+        user, batch, session, round_obj = self.create_round_for_step("post", username="p_post_save_reaction")
+
+        response = self.client.post(reverse("survey:post"), {"comment_1": "like"})
+
+        self.assertEqual(response.status_code, 302)
+        reaction = CommentReaction.objects.get(round=round_obj, comment_snapshot_id=1)
+        self.assertEqual(reaction.reaction, "like")
 
     def test_post_styles_use_frameless_small_reaction_icons(self):
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
@@ -315,7 +420,8 @@ class SurveyViewTests(TestCase):
 
     def test_mode_page_renders_mode_cards_with_skip_last(self):
         user, batch, session, round_obj = self.create_round_for_step("mode", username="p_mode")
-        AIMode.objects.create(batch=batch, name_zh="提出不同观点", prompt_zh="提出一个不同角度。")
+        long_prompt = "提出一个不同角度，帮助我看到当前观点背后可能被忽略的理由和反例。"
+        AIMode.objects.create(batch=batch, name_zh="提出不同观点", prompt_zh=long_prompt)
         AIMode.objects.create(batch=batch, name_zh="支持我的观点", prompt_zh="补充支持理由。")
 
         response = self.client.get(reverse("survey:mode_select"))
@@ -323,8 +429,19 @@ class SurveyViewTests(TestCase):
 
         self.assertContains(response, "选择对话模式")
         self.assertContains(response, 'class="mode-card"')
+        self.assertContains(response, 'class="mode-description"')
+        self.assertContains(response, long_prompt)
+        self.assertNotContains(response, "忽略的理由和反例…")
         self.assertLess(content.rfind('value="skip"'), content.rfind("</form>"))
         self.assertContains(response, "跳过")
+
+    def test_mode_description_styles_show_full_left_aligned_copy(self):
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn(".mode-description", stylesheet)
+        self.assertIn("text-align: left", stylesheet)
+        self.assertIn("white-space: normal", stylesheet)
+        self.assertIn("overflow: visible", stylesheet)
 
     def test_chat_page_renders_chinese_game_chat_ui(self):
         user, batch, session, round_obj = self.create_round_for_step("chat", username="p_chat")

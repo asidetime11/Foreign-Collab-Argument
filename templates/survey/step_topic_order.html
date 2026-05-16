@@ -12,6 +12,8 @@
     </div>
   </div>
   <p class="sort-direction">从上到下：最重要 → 最不重要</p>
+  <p class="drag-tip">拖动卡片可调整排序；拖到页面边缘会自动滚动，也可以用右侧按钮微调。</p>
+  <p class="drag-status" data-drag-status aria-live="polite"></p>
   <form method="post" class="task-form">
     {% csrf_token %}
     {{ form.ordered_topic_ids }}

@@ -63,7 +63,6 @@ class Topic(models.Model):
 
 
 class TopicComment(models.Model):
-    AUTHORS = ["林一", "陈晨", "周明", "小雨", "Alex", "Mina"]
     TIMES = ["刚刚", "5 分钟前", "18 分钟前", "1 小时前", "昨天"]
 
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name="comments", verbose_name="话题")
@@ -84,8 +83,6 @@ class TopicComment(models.Model):
         seed_source = f"{self.topic_id}:{self.position}:{self.body_zh[:20]}"
         digest = hashlib.sha256(seed_source.encode("utf-8")).hexdigest()
         number = int(digest[:8], 16)
-        if not self.auto_author_name:
-            self.auto_author_name = self.AUTHORS[number % len(self.AUTHORS)]
         if not self.avatar_seed:
             self.avatar_seed = digest[:12]
         if not self.like_count:
@@ -102,7 +99,7 @@ class TopicComment(models.Model):
             "id": self.pk,
             "body_zh": self.body_zh,
             "body_en": self.body_en,
-            "author": self.auto_author_name,
+            "author": "",
             "avatar_seed": self.avatar_seed,
             "like_count": self.like_count,
             "relative_time": self.relative_time,

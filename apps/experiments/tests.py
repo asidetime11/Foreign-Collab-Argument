@@ -6,7 +6,7 @@ from django.urls import reverse
 from io import BytesIO
 from openpyxl import load_workbook
 
-from apps.survey.models import ConversationMessage, ScaleResponse, SurveySession, TextResponse
+from apps.survey.models import CommentReaction, ConversationMessage, ScaleResponse, SurveySession, TextResponse
 from apps.accounts.models import ParticipantProfile
 
 from .models import AIMode, ExperimentBatch, RatingScaleConfig, ScaleItem, Topic, TopicComment
@@ -27,7 +27,7 @@ class ExperimentModelTests(TestCase):
 
         comment = TopicComment.objects.create(topic=topic, body_zh="这是评论", position=1)
 
-        self.assertTrue(comment.auto_author_name)
+        self.assertEqual(comment.auto_author_name, "")
         self.assertTrue(comment.avatar_seed)
         self.assertTrue(comment.relative_time)
 
@@ -56,20 +56,17 @@ class ExperimentModelTests(TestCase):
         self.assertContains(response, "AI 模式 Prompt")
         self.assertContains(response, "一键导出全部用户数据")
         self.assertContains(response, reverse("research_admin_copy"))
-        self.assertContains(response, reverse("research_admin_bulk_register"))
+        self.assertNotContains(response, reverse("research_admin_bulk_register"))
         self.assertContains(response, reverse("research_admin_export_all"))
 
-    def test_admin_index_only_shows_research_console_entry(self):
+    def test_admin_index_redirects_to_research_console(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
         ExperimentBatch.objects.create(name="批次 A")
         self.client.force_login(admin_user)
 
         response = self.client.get(reverse("admin:index"))
 
-        self.assertContains(response, "协同论证平台后台")
-        self.assertContains(response, reverse("research_admin_dashboard"))
-        self.assertNotContains(response, "app-experiments")
-        self.assertNotContains(response, "最近动作")
+        self.assertRedirects(response, reverse("research_admin_dashboard"))
 
     def test_copy_settings_uses_custom_form_without_repeated_title(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
@@ -99,7 +96,24 @@ class ExperimentModelTests(TestCase):
             self.assertNotContains(response, "批次")
             self.assertNotContains(response, "batch")
 
-    def test_topic_comment_inline_hides_avatar_seed_and_allows_editing_metadata(self):
+    def test_model_admin_pages_link_back_to_research_console(self):
+        admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
+        batch = ExperimentBatch.objects.create(name="Batch A")
+        topic = Topic.objects.create(batch=batch, title_zh="Topic A", position=1)
+        mode = AIMode.objects.create(batch=batch, name_zh="Mode A", prompt_zh="Prompt A")
+        self.client.force_login(admin_user)
+
+        responses = [
+            self.client.get(reverse("admin:experiments_topic_changelist")),
+            self.client.get(reverse("admin:experiments_topic_change", args=[topic.pk])),
+            self.client.get(reverse("admin:experiments_aimode_changelist")),
+            self.client.get(reverse("admin:experiments_aimode_change", args=[mode.pk])),
+        ]
+
+        for response in responses:
+            self.assertContains(response, f'href="{reverse("research_admin_dashboard")}"')
+
+    def test_topic_comment_inline_hides_generated_identity_fields(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
         batch = ExperimentBatch.objects.create(name="批次 A")
         topic = Topic.objects.create(batch=batch, title_zh="话题 A", position=1)
@@ -114,10 +128,10 @@ class ExperimentModelTests(TestCase):
 
         response = self.client.get(reverse("admin:experiments_topic_change", args=[topic.pk]))
 
-        self.assertContains(response, "作者昵称")
-        self.assertContains(response, 'name="comments-0-auto_author_name"')
         self.assertContains(response, 'name="comments-0-like_count"')
         self.assertContains(response, 'name="comments-0-relative_time"')
+        self.assertNotContains(response, "作者昵称")
+        self.assertNotContains(response, 'name="comments-0-auto_author_name"')
         self.assertNotContains(response, "头像种子")
         self.assertNotContains(response, "avatar_seed")
 
@@ -149,6 +163,50 @@ class ExperimentModelTests(TestCase):
         self.assertEqual(rows[2][0], "student002")
         self.assertFalse(User.objects.filter(username="student001").exists())
         self.assertFalse(User.objects.filter(username="student002").exists())
+
+    def test_export_all_includes_comment_reactions_sheet(self):
+        admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
+        batch = ExperimentBatch.objects.create(name="批次 A", is_active=True)
+        participant = User.objects.create_user("p_react", password="Start12345")
+        participant.participant_profile.display_name = "参与者"
+        participant.participant_profile.batch = batch
+        participant.participant_profile.save(update_fields=["display_name", "batch"])
+        session = SurveySession.objects.create(
+            user=participant,
+            batch=batch,
+            batch_snapshot={},
+            topic_order_snapshot=[],
+        )
+        round_obj = session.rounds.create(
+            round_type="high",
+            topic_id=11,
+            material_snapshot={
+                "comments": [
+                    {
+                        "id": 101,
+                        "author": "周明",
+                        "body_zh": "这个观点很有意思。",
+                        "relative_time": "刚刚",
+                        "like_count": 20,
+                    }
+                ]
+            },
+        )
+        CommentReaction.objects.create(round=round_obj, comment_snapshot_id=101, reaction="like")
+        self.client.force_login(admin_user)
+
+        response = self.client.get(reverse("research_admin_export_all"))
+
+        workbook = load_workbook(BytesIO(response.content))
+        self.assertIn("评论互动", workbook.sheetnames)
+        sheet = workbook["评论互动"]
+        rows = list(sheet.iter_rows(values_only=True))
+        self.assertEqual(rows[0], ("用户名", "轮次", "话题ID", "评论ID", "评论作者", "评论内容", "互动", "提交时间"))
+        self.assertEqual(rows[1][0], "p_react")
+        self.assertEqual(rows[1][3], 101)
+        self.assertEqual(rows[1][4], "小兔")
+        self.assertEqual(rows[1][5], "这个观点很有意思。")
+        self.assertEqual(rows[1][6], "赞")
 
     def test_bulk_register_confirm_creates_users_then_shows_them_in_user_data(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
@@ -212,6 +270,7 @@ class ExperimentModelTests(TestCase):
         self.assertContains(response, "账号状态")
         self.assertContains(response, "fresh_user")
         self.assertContains(response, "未开始")
+        self.assertContains(response, reverse("research_admin_bulk_register"))
 
     def test_user_data_page_has_single_and_bulk_delete_controls(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")

@@ -13,12 +13,12 @@
     {% for mode in modes %}
       <button class="mode-card" name="selected_mode" value="{{ mode.pk }}" type="submit">
         <strong>{{ mode.name_zh }}</strong>
-        <span>{{ mode.prompt_zh|truncatechars:42 }}</span>
+        <span class="mode-description">{{ mode.prompt_zh }}</span>
       </button>
     {% endfor %}
     <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit">
       <strong>跳过</strong>
-      <span>不使用人工智能，直接进入下一站。</span>
+      <span class="mode-description">不使用人工智能，直接进入下一站。</span>
     </button>
   </form>
 </section>

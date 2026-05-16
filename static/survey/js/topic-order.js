@@ -1,6 +1,7 @@
 (function () {
   const list = document.getElementById("topic-list");
   const input = document.querySelector('input[name="ordered_topic_ids"]');
+  const status = document.querySelector("[data-drag-status]");
   if (!list || !input) return;
 
   function items() {
@@ -19,16 +20,93 @@
   }
 
   let dragged = null;
+  let dragOverTarget = null;
+  let autoScrollFrame = null;
+  let autoScrollSpeed = 0;
+
+  function setStatus(message) {
+    if (status) status.textContent = message;
+  }
+
+  function clearDragOver() {
+    if (dragOverTarget) {
+      dragOverTarget.classList.remove("drag-over");
+      dragOverTarget = null;
+    }
+  }
+
+  function setDragOver(target) {
+    if (dragOverTarget === target) return;
+    clearDragOver();
+    dragOverTarget = target;
+    if (dragOverTarget) dragOverTarget.classList.add("drag-over");
+  }
+
+  function stopAutoScroll() {
+    autoScrollSpeed = 0;
+    if (autoScrollFrame) {
+      window.cancelAnimationFrame(autoScrollFrame);
+      autoScrollFrame = null;
+    }
+  }
+
+  function autoScrollLoop() {
+    if (!autoScrollSpeed) {
+      autoScrollFrame = null;
+      return;
+    }
+    window.scrollBy(0, autoScrollSpeed);
+    autoScrollFrame = window.requestAnimationFrame(autoScrollLoop);
+  }
+
+  function updateAutoScroll(clientY) {
+    const threshold = 110;
+    const maxSpeed = 18;
+    const topDistance = clientY;
+    const bottomDistance = window.innerHeight - clientY;
+
+    if (topDistance < threshold) {
+      autoScrollSpeed = -Math.ceil(((threshold - topDistance) / threshold) * maxSpeed);
+    } else if (bottomDistance < threshold) {
+      autoScrollSpeed = Math.ceil(((threshold - bottomDistance) / threshold) * maxSpeed);
+    } else {
+      stopAutoScroll();
+      return;
+    }
+
+    if (!autoScrollFrame) autoScrollFrame = window.requestAnimationFrame(autoScrollLoop);
+  }
+
+  function flashMoved(item) {
+    item.classList.remove("just-moved");
+    window.requestAnimationFrame(() => {
+      item.classList.add("just-moved");
+      window.setTimeout(() => item.classList.remove("just-moved"), 850);
+    });
+  }
+
+  function finishDrag(message) {
+    if (dragged) dragged.classList.remove("dragging");
+    list.classList.remove("dragging-active");
+    clearDragOver();
+    stopAutoScroll();
+    dragged = null;
+    sync();
+    setStatus(message || "排序已更新。");
+  }
 
   list.addEventListener("dragstart", (event) => {
     dragged = event.target.closest("[data-topic-id]");
-    if (dragged) dragged.classList.add("dragging");
+    if (!dragged) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", dragged.dataset.topicId);
+    dragged.classList.add("dragging");
+    list.classList.add("dragging-active");
+    setStatus("正在拖动，移到目标位置后松开即可。");
   });
 
   list.addEventListener("dragend", () => {
-    if (dragged) dragged.classList.remove("dragging");
-    dragged = null;
-    sync();
+    finishDrag("排序已更新。");
   });
 
   list.addEventListener("dragover", (event) => {
@@ -36,8 +114,23 @@
     const target = event.target.closest("[data-topic-id]");
     if (!target || !dragged || target === dragged) return;
     const rect = target.getBoundingClientRect();
+    setDragOver(target);
     list.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
-    sync();
+  });
+
+  list.addEventListener("dragleave", (event) => {
+    if (!list.contains(event.relatedTarget)) clearDragOver();
+  });
+
+  document.addEventListener("dragover", (event) => {
+    if (!dragged) return;
+    event.preventDefault();
+    updateAutoScroll(event.clientY);
+  });
+
+  document.addEventListener("drop", () => {
+    if (!dragged) return;
+    finishDrag("排序已更新。");
   });
 
   list.addEventListener("click", (event) => {
@@ -51,6 +144,8 @@
       list.insertBefore(item.nextElementSibling, item);
     }
     sync();
+    flashMoved(item);
+    setStatus(`${item.querySelector(".topic-title").textContent} 已移动到第 ${items().indexOf(item) + 1} 位。`);
   });
 
   sync();

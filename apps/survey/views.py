@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from apps.experiments.defaults import DEFAULT_TOPIC_ORDER_INTRO_ZH
 from apps.experiments.models import AIMode, ScaleItem
 
+from .comment_identity import comment_avatar_file, comment_display_name
 from .forms import AIModeForm, CommentReactionForm, ScaleForm, TextResponseForm, TopicOrderForm
 from .models import CommentReaction, ScaleResponse, SurveySession, TextResponse
 from .services import (
@@ -57,11 +58,6 @@ def _localized(material, field, language):
     if language.startswith("en"):
         return material.get(f"{field}_en") or material.get(f"{field}_zh") or ""
     return material.get(f"{field}_zh") or material.get(f"{field}_en") or ""
-
-
-def _comment_avatar_file(index):
-    number = index % 7 + 1
-    return f"avatar{number}.png"
 
 
 def _guard_session(request):
@@ -191,8 +187,9 @@ def post(request):
         "comments": [
             {
                 **comment,
+                "author": comment_display_name(index),
                 "body": comment.get("body_en") if language.startswith("en") and comment.get("body_en") else comment.get("body_zh"),
-                "avatar_file": _comment_avatar_file(index),
+                "avatar_file": comment_avatar_file(index),
             }
             for index, comment in enumerate(comments)
         ],
