@@ -11,3 +11,5 @@ staticfiles/
 .worktrees/
 .superpowers/
 runserver.*.log
+*.egg-info/
+/docs/plans/
