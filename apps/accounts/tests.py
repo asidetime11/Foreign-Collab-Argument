@@ -24,6 +24,11 @@ class ParticipantProfileTests(TestCase):
 
         self.assertContains(response, reverse("accounts:register"))
 
+    def test_root_path_opens_login_page(self):
+        response = self.client.get("/")
+
+        self.assertRedirects(response, reverse("login"))
+
     def test_registration_page_uses_chinese_account_copy(self):
         response = self.client.get(reverse("accounts:register"))
 
@@ -40,6 +45,22 @@ class ParticipantProfileTests(TestCase):
 
         self.assertNotContains(response, "必填；长度不超过 150 个字符")
         self.assertNotContains(response, "可使用字母、数字和 @ . + - _")
+
+    def test_account_entry_pages_use_polished_auth_shell(self):
+        pages = [
+            (reverse("accounts:register"), "加入任务，开始你的协同论证体验"),
+            (reverse("login"), "回到任务，继续你的协同论证体验"),
+        ]
+
+        for url, subtitle in pages:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+
+                self.assertContains(response, "auth-card")
+                self.assertContains(response, 'class="auth-head"')
+                self.assertContains(response, 'class="auth-subtitle"')
+                self.assertContains(response, subtitle)
+                self.assertNotContains(response, 'class="auth-badge"')
 
     def test_registration_password_requires_at_least_five_characters(self):
         response = self.client.post(
@@ -87,6 +108,17 @@ class ParticipantProfileTests(TestCase):
         self.assertContains(response, 'class="form-errors form-errors-global"')
         self.assertContains(response, "用户名或密码不正确，请重新输入。")
         self.assertNotContains(response, "__all__")
+
+    def test_account_switch_links_are_left_aligned(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn(".account-switch", stylesheet)
+        self.assertIn("justify-content: flex-start", stylesheet)
+        self.assertIn("flex-wrap: nowrap", stylesheet)
 
     def test_authenticated_top_actions_use_account_menu(self):
         user = User.objects.create_user("p_nav", password="pass")

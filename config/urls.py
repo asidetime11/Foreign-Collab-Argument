@@ -15,6 +15,7 @@ urlpatterns = [
     path("admin/research/users/delete/", research_admin_views.delete_users, name="research_admin_delete_users"),
     path("admin/research/users/<int:user_id>/delete/", research_admin_views.delete_user, name="research_admin_delete_user"),
     path("admin/research/export-all/", research_admin_views.export_all, name="research_admin_export_all"),
+    path("admin/", RedirectView.as_view(pattern_name="research_admin_dashboard", permanent=False)),
     path("admin/", admin.site.urls),
     path("accounts/login/", LoginView.as_view(authentication_form=ChineseAuthenticationForm), name="login"),
     path("accounts/", include("django.contrib.auth.urls")),
@@ -22,5 +23,5 @@ urlpatterns = [
     path("survey/", include("apps.survey.urls")),
     path("ai/", include("apps.ai.urls")),
     path("exports/", include("apps.exports.urls")),
-    path("", RedirectView.as_view(pattern_name="survey:start", permanent=False)),
+    path("", RedirectView.as_view(pattern_name="login", permanent=False)),
 ]

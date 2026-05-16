@@ -99,7 +99,6 @@ def dashboard(request):
         "topics_url": reverse("admin:experiments_topic_changelist"),
         "ai_modes_url": reverse("admin:experiments_aimode_changelist"),
         "users_url": reverse("research_admin_users"),
-        "bulk_register_url": reverse("research_admin_bulk_register"),
         "export_url": reverse("research_admin_export_all"),
     }
     return render(request, "admin/research/dashboard.html", context)

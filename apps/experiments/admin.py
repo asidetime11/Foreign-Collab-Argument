@@ -9,8 +9,8 @@ from .models import AIMode, Topic, TopicComment
 class TopicCommentInline(admin.TabularInline):
     model = TopicComment
     extra = 0
-    exclude = ("avatar_seed",)
-    fields = ("body_zh", "body_en", "position", "auto_author_name", "like_count", "relative_time")
+    exclude = ("avatar_seed", "auto_author_name")
+    fields = ("body_zh", "body_en", "position", "like_count", "relative_time")
     formfield_overrides = {
         models.TextField: {"widget": forms.Textarea(attrs={"rows": 3})},
     }

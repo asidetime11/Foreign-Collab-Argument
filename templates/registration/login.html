@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% block title %}登录{% endblock %}
 {% block content %}
-<section class="panel narrow">
-  <h1>参与者登录</h1>
+<section class="auth-card auth-card-login panel narrow">
+  <div class="auth-head">
+    <h1>参与者登录</h1>
+    <p class="auth-subtitle">回到任务，继续你的协同论证体验</p>
+  </div>
   <form method="post" class="stack">
     {% csrf_token %}
     {% include "accounts/partials/form_fields.html" %}
     <button class="primary" type="submit">登录</button>
-    <p>还没有账号？<a href="{% url 'accounts:register' %}">注册</a></p>
+    <p class="account-switch">还没有账号？<a href="{% url 'accounts:register' %}">注册</a></p>
   </form>
 </section>
 {% endblock %}

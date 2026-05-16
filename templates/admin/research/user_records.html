@@ -43,6 +43,13 @@
     white-space: nowrap;
   }
 
+  .records-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
   .records-table {
     overflow: hidden;
   }
@@ -175,7 +182,10 @@
       <h1>用户数据</h1>
       <p>按用户查看流程进度，并在需要时导出完整研究记录。</p>
     </div>
-    <a class="button default" href="{% url 'research_admin_export_all' %}">一键导出全部用户数据</a>
+    <div class="records-actions">
+      <a class="button" href="{% url 'research_admin_bulk_register' %}">批量注册新用户</a>
+      <a class="button default" href="{% url 'research_admin_export_all' %}">一键导出全部用户数据</a>
+    </div>
   </section>
   <section class="records-summary" aria-label="用户概览">
     <div class="records-summary-card"><span>参与账号</span><strong>{{ rows|length }}</strong></div>
