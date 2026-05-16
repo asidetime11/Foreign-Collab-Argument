@@ -154,8 +154,112 @@ class AIMode(models.Model):
 
     class Meta:
         ordering = ["position", "id"]
-        verbose_name = "AI 模式"
-        verbose_name_plural = "AI 模式"
+        verbose_name = "AI 模式 (Prompt配置)"
+        verbose_name_plural = "AI 模式 (Prompt配置)"
 
     def __str__(self):
         return self.name_zh
+
+
+class SystemAPIConfig(models.Model):
+    """系统级API配置 - 单例模型"""
+    active_provider = models.ForeignKey(
+        'LLMProvider',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='system_configs',
+        verbose_name='当前使用的LLM提供商',
+        help_text='选择系统统一使用的AI模型提供商'
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "系统API配置"
+        verbose_name_plural = "系统API配置"
+
+    def __str__(self):
+        if self.active_provider:
+            return f"当前使用: {self.active_provider.name}"
+        return "未配置API"
+
+    def save(self, *args, **kwargs):
+        # 确保只有一条记录（单例模式）
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_instance(cls):
+        """获取单例实例"""
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class LLMProvider(models.Model):
+    """LLM模型提供商配置"""
+    name = models.CharField("提供商名称", max_length=120, unique=True, help_text="例如: GPT-4, Claude, Qwen等")
+    model_name = models.CharField("模型名称", max_length=200, help_text="调用API时使用的模型标识，例如: gpt-4, claude-3-opus")
+    base_url = models.URLField("API Base URL", help_text="模型API的基础URL")
+    is_active = models.BooleanField("启用", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "LLM 提供商"
+        verbose_name_plural = "LLM 提供商"
+        ordering = ['-is_active', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.model_name})"
+
+    def get_next_api_key(self):
+        """获取下一个可用的API Key（轮询分配）"""
+        from django.db import transaction
+        from django.db.models import F
+
+        with transaction.atomic():
+            # 获取所有启用的key，按使用次数排序
+            keys = self.api_keys.filter(is_active=True).select_for_update().order_by('usage_count')
+
+            if not keys.exists():
+                raise ValueError(f"提供商 {self.name} 没有可用的API Key")
+
+            # 获取使用次数最少的key
+            selected_key = keys.first()
+
+            # 增加使用计数
+            selected_key.usage_count = F('usage_count') + 1
+            selected_key.save(update_fields=['usage_count'])
+
+            # 刷新以获取实际的usage_count值
+            selected_key.refresh_from_db()
+
+            return selected_key.api_key
+
+
+class APIKey(models.Model):
+    """API Key池，支持多个key的负载均衡"""
+    provider = models.ForeignKey(
+        LLMProvider,
+        on_delete=models.CASCADE,
+        related_name='api_keys',
+        verbose_name='LLM 提供商'
+    )
+    api_key = models.CharField("API Key", max_length=500)
+    name = models.CharField("Key名称", max_length=120, blank=True, help_text="便于识别的key名称，例如: key-1, key-2")
+    usage_count = models.PositiveIntegerField("使用次数", default=0, help_text="记录该key被使用的次数，用于轮询分配")
+    is_active = models.BooleanField("启用", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    last_used_at = models.DateTimeField("最后使用时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "API Key"
+        verbose_name_plural = "API Keys"
+        ordering = ['provider', 'usage_count', 'id']
+
+    def __str__(self):
+        key_preview = f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else self.api_key
+        name_part = f" ({self.name})" if self.name else ""
+        return f"{self.provider.name} - {key_preview}{name_part}"
+

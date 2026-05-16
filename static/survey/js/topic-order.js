@@ -12,10 +12,13 @@
     const currentItems = items();
     input.value = currentItems.map((item) => item.dataset.topicId).join(",");
     currentItems.forEach((item, index) => {
-      const rank = item.querySelector(".topic-rank");
-      if (rank) rank.textContent = `第 ${index + 1} 位`;
       item.classList.toggle("is-first", index === 0);
       item.classList.toggle("is-last", index === currentItems.length - 1);
+      // Update topic number
+      const numberElement = item.querySelector('.topic-number');
+      if (numberElement) {
+        numberElement.textContent = index + 1;
+      }
     });
   }
 
@@ -106,6 +109,13 @@
   });
 
   list.addEventListener("dragend", () => {
+    if (dragged) {
+      // Add bounce animation
+      dragged.classList.add('drop-bounce');
+      setTimeout(() => {
+        if (dragged) dragged.classList.remove('drop-bounce');
+      }, 300);
+    }
     finishDrag("排序已更新。");
   });
 
@@ -116,6 +126,8 @@
     const rect = target.getBoundingClientRect();
     setDragOver(target);
     list.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+    // Update numbers in real-time during drag
+    sync();
   });
 
   list.addEventListener("dragleave", (event) => {
@@ -145,7 +157,9 @@
     }
     sync();
     flashMoved(item);
-    setStatus(`${item.querySelector(".topic-title").textContent} 已移动到第 ${items().indexOf(item) + 1} 位。`);
+    const titleElement = item.querySelector(".topic-content h3");
+    const title = titleElement ? titleElement.textContent : "话题";
+    setStatus(`${title} 已移动到第 ${items().indexOf(item) + 1} 位。`);
   });
 
   sync();

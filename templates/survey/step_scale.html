@@ -21,28 +21,44 @@
   <form method="post" class="task-form rating-form">
     {% csrf_token %}
     {% for item in items %}
-      <fieldset class="rating-card answered" data-min="{{ item.min_value }}" data-max="{{ item.max_value }}">
-        <legend>{{ item.label_zh }}</legend>
-        <input type="hidden" name="item_{{ item.pk }}" value="{{ item.min_value }}" required>
-        <div class="rating-slider answered" role="group" aria-label="{{ item.label_zh }}">
-          <div class="rating-readout" aria-live="polite">
-            <span class="rating-value">{{ item.min_value }}</span>
+      <div class="scale-question" data-scale-id="{{ item.pk }}">
+        <label class="scale-label">{{ item.label_zh }}</label>
+
+        <div class="slider-container">
+          <!-- Left/Right text labels -->
+          <div class="slider-labels">
+            <span class="label-left">{{ item.left_label_zh }}</span>
+            <span class="label-right">{{ item.right_label_zh }}</span>
           </div>
-          <input
-            type="range"
-            min="{{ item.min_value }}"
-            max="{{ item.max_value }}"
-            step="1"
-            value="{{ item.min_value }}"
-            aria-label="{{ item.label_zh }}"
-          >
-          <div class="rating-scale-labels" aria-hidden="true">
+
+          <!-- Slider input -->
+          <div class="slider-wrapper">
+            <input
+              type="range"
+              class="scale-slider"
+              min="{{ item.min_value }}"
+              max="{{ item.max_value }}"
+              value="{{ item.min_value }}"
+              step="1"
+              required
+              aria-label="{{ item.label_zh }}"
+              aria-valuemin="{{ item.min_value }}"
+              aria-valuemax="{{ item.max_value }}"
+              aria-valuenow="{{ item.min_value }}"
+            >
+          </div>
+
+          <!-- Fixed number labels -->
+          <div class="slider-numbers">
             {% for value in item.values %}
-              <span>{{ value }}</span>
+            <span class="number-label" data-value="{{ value }}">{{ value }}</span>
             {% endfor %}
           </div>
         </div>
-      </fieldset>
+
+        <!-- Hidden input for form submission -->
+        <input type="hidden" name="item_{{ item.pk }}" class="rating-value" value="{{ item.min_value }}" required>
+      </div>
     {% endfor %}
     <p class="soft-alert" role="status" aria-live="polite" hidden>请先完成所有滑杆，再继续。</p>
     <div class="sticky-submit">
@@ -52,4 +68,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/rating.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/rating.js' %}?v=20260516-4"></script>{% endblock %}

@@ -98,6 +98,8 @@ def dashboard(request):
         "copy_url": reverse("research_admin_copy"),
         "topics_url": reverse("admin:experiments_topic_changelist"),
         "ai_modes_url": reverse("admin:experiments_aimode_changelist"),
+        "system_api_url": reverse("admin:experiments_systemapiconfig_changelist"),
+        "llm_providers_url": reverse("admin:experiments_llmprovider_changelist"),
         "users_url": reverse("research_admin_users"),
         "export_url": reverse("research_admin_export_all"),
     }
