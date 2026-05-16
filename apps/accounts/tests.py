@@ -48,8 +48,8 @@ class ParticipantProfileTests(TestCase):
 
     def test_account_entry_pages_use_polished_auth_shell(self):
         pages = [
-            (reverse("accounts:register"), "加入任务，开始你的协同论证体验"),
-            (reverse("login"), "回到任务，继续你的协同论证体验"),
+            (reverse("accounts:register"), "创建账号，开始你的协同论证之旅"),
+            (reverse("login"), "登录你的账号，继续协同论证体验"),
         ]
 
         for url, subtitle in pages:
@@ -117,7 +117,7 @@ class ParticipantProfileTests(TestCase):
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
 
         self.assertIn(".account-switch", stylesheet)
-        self.assertIn("justify-content: flex-start", stylesheet)
+        self.assertIn("justify-content: center", stylesheet)
         self.assertIn("flex-wrap: nowrap", stylesheet)
 
     def test_authenticated_top_actions_use_account_menu(self):

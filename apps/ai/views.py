@@ -4,6 +4,7 @@ from django.http import HttpResponseBadRequest, JsonResponse, StreamingHttpRespo
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
+from apps.experiments.models import SystemAPIConfig
 from apps.survey.models import ConversationMessage, TopicRound
 
 from .clients import chat_stream, transcribe_audio
@@ -38,13 +39,18 @@ def chat(request, round_id):
     if not text:
         return HttpResponseBadRequest("message is required")
 
+    # 获取系统级API配置
+    system_config = SystemAPIConfig.get_instance()
+    provider = system_config.active_provider
+    model_name = provider.model_name if provider else settings.DEFAULT_CHAT_MODEL
+
     ConversationMessage.objects.create(
         round=round_obj,
         role="participant",
         content=text,
         language=round_obj.session.language,
         ai_mode_name=round_obj.ai_mode.name_zh,
-        model_name=settings.DEFAULT_CHAT_MODEL,
+        model_name=model_name,
     )
     prior_messages = [
         {"role": "system", "content": build_system_prompt(round_obj.session.batch, round_obj.ai_mode, round_obj.session.language)}
@@ -57,7 +63,8 @@ def chat(request, round_id):
     def event_stream():
         chunks = []
         try:
-            for chunk in chat_stream(prior_messages, settings.DEFAULT_CHAT_MODEL):
+            # 使用provider配置进行流式聊天
+            for chunk in chat_stream(prior_messages, provider=provider):
                 chunks.append(chunk)
                 yield _sse_message(chunk)
             final = "".join(chunks)
@@ -67,7 +74,7 @@ def chat(request, round_id):
                 content=final,
                 language=round_obj.session.language,
                 ai_mode_name=round_obj.ai_mode.name_zh,
-                model_name=settings.DEFAULT_CHAT_MODEL,
+                model_name=model_name,
             )
             yield _sse_message("ok", event="done")
         except Exception as exc:  # pragma: no cover - network failure path.
@@ -78,7 +85,7 @@ def chat(request, round_id):
                 content="",
                 language=round_obj.session.language,
                 ai_mode_name=round_obj.ai_mode.name_zh,
-                model_name=settings.DEFAULT_CHAT_MODEL,
+                model_name=model_name,
                 error_message=str(exc),
             )
             yield _sse_message(friendly_message, event="error")

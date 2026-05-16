@@ -213,8 +213,8 @@ def scale(request, step):
     items = list(scale_items_for_step(session.batch, step))
     if step in {"stance_before", "stance_after"} and not items:
         items = [
-            SimpleNamespace(pk=-1, item_type=ScaleItem.STANCE, label_zh="我同意该观点", label_en="I agree with this view", min_value=1, max_value=7),
-            SimpleNamespace(pk=-2, item_type=ScaleItem.STANCE, label_zh="我对判断有把握", label_en="I am certain about my judgment", min_value=1, max_value=7),
+            SimpleNamespace(pk="default-agreement", item_type=ScaleItem.STANCE, label_zh="我同意该观点", label_en="I agree with this view", left_label_zh="完全不同意", left_label_en="Strongly Disagree", right_label_zh="完全同意", right_label_en="Strongly Agree", min_value=1, max_value=7),
+            SimpleNamespace(pk="default-confidence", item_type=ScaleItem.STANCE, label_zh="我对判断有把握", label_en="I am certain about my judgment", left_label_zh="完全没把握", left_label_en="Not Confident At All", right_label_zh="完全有把握", right_label_en="Completely Confident", min_value=1, max_value=7),
         ]
     for item in items:
         item.values = range(item.min_value, item.max_value + 1)

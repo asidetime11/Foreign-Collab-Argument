@@ -1,51 +1,103 @@
-(function () {
-  document.querySelectorAll(".rating-card").forEach((field) => {
-    const input = field.querySelector('input[type="hidden"]');
-    const slider = field.querySelector('input[type="range"]');
-    const readout = field.querySelector(".rating-value");
-    if (!input || !slider || !readout) return;
-    const sliderWrap = slider.closest(".rating-slider");
+// rating.js - Simplified slider without floating bubbles
+(function() {
+  'use strict';
 
-    function updateProgress() {
-      const min = Number(slider.min || 1);
-      const max = Number(slider.max || 7);
-      const value = Number(slider.value || min);
-      const percent = max === min ? 0 : ((value - min) / (max - min)) * 100;
-      if (sliderWrap) sliderWrap.style.setProperty("--rating-percent", `${percent}%`);
-    }
+  document.addEventListener('DOMContentLoaded', initSliders);
 
-    function sync() {
-      input.value = slider.value;
-      readout.textContent = slider.value;
-      field.classList.add("answered");
-      slider.classList.add("answered");
-      if (sliderWrap) sliderWrap.classList.add("answered");
-      updateProgress();
-    }
+  function initSliders() {
+    const sliders = document.querySelectorAll('.scale-slider');
 
-    updateProgress();
-    slider.addEventListener("input", sync);
-    slider.addEventListener("change", sync);
-  });
+    sliders.forEach(slider => {
+      // Initialize display
+      updateSliderDisplay(slider);
 
-  document.querySelectorAll(".rating-form").forEach((form) => {
-    const alert = form.querySelector(".soft-alert");
+      // Listen to input events
+      slider.addEventListener('input', () => updateSliderDisplay(slider));
 
-    form.addEventListener("submit", (event) => {
-      const missing = Array.from(form.querySelectorAll('.rating-card input[type="hidden"]')).filter((input) => !input.value);
-      if (!missing.length) return;
+      // Show progress bar when dragging
+      slider.addEventListener('mousedown', () => {
+        slider.classList.add('dragging');
+      });
 
-      event.preventDefault();
-      if (alert) {
-        alert.hidden = false;
-        alert.textContent = "请先完成所有滑杆，再继续。";
-      }
-      const firstMissing = missing[0].closest(".rating-card");
-      if (firstMissing) {
-        firstMissing.classList.add("needs-answer");
-        const slider = firstMissing.querySelector('input[type="range"]');
-        if (slider) slider.focus();
+      slider.addEventListener('touchstart', () => {
+        slider.classList.add('dragging');
+      });
+
+      // Hide progress bar when released and update display
+      const stopDragging = () => {
+        slider.classList.remove('dragging');
+        // Force update display to ensure answered state is applied
+        setTimeout(() => {
+          updateSliderDisplay(slider);
+        }, 10);
+      };
+
+      slider.addEventListener('mouseup', stopDragging);
+      slider.addEventListener('touchend', stopDragging);
+
+      // Also stop dragging if mouse leaves the document
+      document.addEventListener('mouseup', stopDragging);
+    });
+
+    // Form validation
+    const forms = document.querySelectorAll('.rating-form');
+    forms.forEach(form => {
+      const alert = form.querySelector('.soft-alert');
+
+      form.addEventListener("submit", (event) => {
+        const missingInputs = Array.from(form.querySelectorAll('.rating-value')).filter(input => !input.value);
+        if (!missingInputs.length) return;
+
+        event.preventDefault();
+        if (alert) {
+          alert.hidden = false;
+          alert.textContent = '请先完成所有滑杆，再继续。';
+        }
+
+        const firstMissing = missingInputs[0].closest('.scale-question');
+        if (firstMissing) {
+          const slider = firstMissing.querySelector('.scale-slider');
+          if (slider) slider.focus();
+        }
+      });
+    });
+  }
+
+  function updateSliderDisplay(slider) {
+    if (!slider) return;
+
+    const value = parseInt(slider.value);
+    const min = parseInt(slider.min);
+    const max = parseInt(slider.max);
+
+    // Update ARIA attribute
+    slider.setAttribute('aria-valuenow', value);
+
+    // Update track fill using CSS custom property on the slider itself
+    const percent = ((value - min) / (max - min)) * 100;
+    slider.style.setProperty('--slider-percent', percent + '%');
+
+    // Highlight current number
+    const container = slider.closest('.scale-question');
+    if (!container) return;
+
+    const numbers = container.querySelectorAll('.number-label');
+    numbers.forEach(label => {
+      const labelValue = parseInt(label.dataset?.value || '0');
+      if (labelValue === value) {
+        label.classList.add('active');
+      } else {
+        label.classList.remove('active');
       }
     });
-  });
+
+    // Update hidden input for form submission
+    const hiddenInput = container.querySelector('.rating-value');
+    if (hiddenInput) {
+      hiddenInput.value = value;
+    }
+
+    // Mark as answered
+    container.classList.add('answered');
+  }
 })();

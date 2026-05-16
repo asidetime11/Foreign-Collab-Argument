@@ -20,8 +20,20 @@
     <ol id="topic-list" class="topic-list" aria-label="话题排序">
       {% for topic in topics %}
         <li class="topic-card" draggable="true" data-topic-id="{{ topic.id }}">
-          <span class="topic-rank">第 {{ forloop.counter }} 位</span>
-          <span class="topic-title">{{ topic.title }}</span>
+          <div class="drag-handle" aria-label="Drag to reorder">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="4" r="1.5"/>
+              <circle cx="11" cy="4" r="1.5"/>
+              <circle cx="5" cy="8" r="1.5"/>
+              <circle cx="11" cy="8" r="1.5"/>
+              <circle cx="5" cy="12" r="1.5"/>
+              <circle cx="11" cy="12" r="1.5"/>
+            </svg>
+          </div>
+          <div class="topic-number">{{ forloop.counter }}</div>
+          <div class="topic-content">
+            <h3>{{ topic.title }}</h3>
+          </div>
           <span class="topic-actions">
             <button type="button" data-move="up" aria-label="上移 {{ topic.title }}">↑</button>
             <button type="button" data-move="down" aria-label="下移 {{ topic.title }}">↓</button>
@@ -36,4 +48,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260516-6"></script>{% endblock %}

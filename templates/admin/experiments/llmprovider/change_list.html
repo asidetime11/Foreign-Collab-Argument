@@ -1,0 +1,22 @@
+{% extends "admin/change_list.html" %}
+
+{% block content_title %}
+  <h1>{{ title }}</h1>
+  {% if system_config %}
+  <div style="background: linear-gradient(125deg, #fff8d8 0%, #edfff5 64%, #e7fbff 100%); border: 1px solid rgba(23, 71, 93, .18); border-left: 6px solid #176a80; border-radius: 8px; padding: 20px 24px; margin: 16px 0 24px; box-shadow: 0 12px 28px rgba(23, 71, 93, .12);">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <div>
+        <div style="font-size: 14px; color: #657486; margin-bottom: 6px;">系统当前使用</div>
+        <div style="font-size: 20px; font-weight: 600; color: #172033;">
+          {% if system_config.active_provider %}
+            {{ system_config.active_provider.name }} ({{ system_config.active_provider.model_name }})
+          {% else %}
+            <span style="color: #c74444;">未配置</span>
+          {% endif %}
+        </div>
+      </div>
+      <a href="{{ system_api_change_url }}" style="padding: 10px 20px; background: #176a80; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; transition: background .2s;">更改系统配置</a>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}

@@ -9,19 +9,54 @@
     <h1>{{ step_meta.title }}</h1>
     <p class="intro-text">读完帖子和留言后，可以给每条留言点一个正大拇指或倒大拇指。</p>
   </div>
-  <article class="post-card">
-    <h2>{{ material.title }}</h2>
-    <p>{{ material.post_body }}</p>
-  </article>
-  <form method="post" class="task-form">
-    {% csrf_token %}
-    <section class="comments" aria-label="评论">
-      {% for comment in material.comments %}
-        <article class="comment-card">
-          <img class="comment-avatar" alt="" src="{% static 'survey/img/' %}{{ comment.avatar_file }}">
-          <div class="comment-body">
-            <div class="comment-meta"><strong>{{ comment.author }}</strong><span>{{ comment.relative_time }} · {{ comment.like_count }} 赞</span></div>
-            <p>{{ comment.body }}</p>
+  <!-- Post Card -->
+  <div class="post-card">
+    <div class="post-header">
+      <img src="{% static 'survey/img/avatar-1.png' %}" alt="" class="avatar avatar-large">
+      <div class="post-meta">
+        <span class="username">{{ material.author_name|default:"Anonymous" }}</span>
+        <span class="timestamp">· 2小时前</span>
+      </div>
+    </div>
+
+    <div class="post-content">
+      <h2 class="post-title">{{ material.title }}</h2>
+      <div class="post-body">{{ material.post_body|linebreaks }}</div>
+    </div>
+
+    <div class="post-actions">
+      <span class="comment-count">💬 {{ material.comments|length }}</span>
+      <button type="button" class="reaction-btn" data-reaction="like">
+        <span class="reaction-icon">👍</span>
+        <span class="reaction-label">Like</span>
+      </button>
+      <button type="button" class="reaction-btn" data-reaction="dislike">
+        <span class="reaction-icon">👎</span>
+        <span class="reaction-label">Dislike</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Comments Section -->
+  <div class="comments-section">
+    <h3 class="comments-header">💬 评论 ({{ material.comments|length }})</h3>
+
+    <form method="post" class="task-form">
+      {% csrf_token %}
+      <div class="comments-list">
+        {% for comment in material.comments %}
+        <div class="comment-card">
+          <div class="comment-header">
+            <img src="{% static 'survey/img/' %}{{ comment.avatar_file }}"
+                 alt="" class="avatar avatar-small">
+            <div class="comment-meta">
+              <span class="username">{{ comment.author }}</span>
+              <span class="timestamp">· {{ comment.relative_time }}</span>
+            </div>
+          </div>
+          <div class="comment-body">{{ comment.body }}</div>
+          <div class="comment-actions">
+            <span class="like-count">👍 {{ comment.like_count|default:0 }}</span>
             <div class="reaction-group">
               <input type="hidden" name="comment_{{ comment.id }}" value="none">
               <button
@@ -44,14 +79,15 @@
               </button>
             </div>
           </div>
-        </article>
-      {% endfor %}
-    </section>
-    <div class="sticky-submit">
-      <strong>评论互动不是必选项，读完即可继续。</strong>
-      <button class="primary" type="submit">继续</button>
-    </div>
-  </form>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="sticky-submit">
+        <strong>评论互动不是必选项，读完即可继续。</strong>
+        <button class="primary" type="submit">继续</button>
+      </div>
+    </form>
+  </div>
 </section>
 {% endblock %}
 {% block scripts %}<script src="{% static 'survey/js/reactions.js' %}"></script>{% endblock %}

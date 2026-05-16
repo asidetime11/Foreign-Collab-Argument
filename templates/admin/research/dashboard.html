@@ -96,7 +96,32 @@
     border-color: rgba(34, 150, 103, .26);
   }
 
-  @media (max-width: 900px) { .research-grid, .research-actions { grid-template-columns: 1fr; } }
+  .research-section {
+    display: grid;
+    gap: 12px;
+  }
+
+  .research-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #172033;
+    margin: 0;
+    padding: 0 4px;
+  }
+
+  .research-subsection {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    padding-left: 12px;
+    border-left: 3px solid rgba(23, 106, 128, .15);
+  }
+
+  @media (max-width: 900px) {
+    .research-grid, .research-actions, .research-subsection {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -116,9 +141,16 @@
   <section class="research-actions" aria-label="管理入口">
     <a class="research-action" href="{{ copy_url }}"><b>第一步说明文字</b><span>修改参与者进入排序页时看到的小字说明。</span></a>
     <a class="research-action" href="{{ topics_url }}"><b>话题材料</b><span>编辑每个话题、帖子正文和配套评论。</span></a>
-    <a class="research-action" href="{{ ai_modes_url }}"><b>AI 模式 Prompt</b><span>修改每个 AI 对话模式使用的提示词。</span></a>
     <a class="research-action" href="{{ users_url }}"><b>用户数据</b><span>按用户查看排序、量表、文本和 AI 对话完成情况。</span></a>
     <a class="research-action export" href="{{ export_url }}"><b>一键导出全部用户数据</b><span>下载包含所有用户完整记录的 Excel。</span></a>
+  </section>
+
+  <section class="research-section" aria-label="AI模式配置">
+    <h2 class="research-section-title">AI 模式配置</h2>
+    <div class="research-subsection">
+      <a class="research-action" href="{{ llm_providers_url }}"><b>模型与API配置</b><span>配置AI模型、API地址、密钥池和选择系统使用的模型。</span></a>
+      <a class="research-action" href="{{ ai_modes_url }}"><b>Prompt 配置</b><span>修改每个 AI 对话模式使用的提示词。</span></a>
+    </div>
   </section>
 </div>
 {% endblock %}

@@ -203,8 +203,8 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:topic_order"))
 
         self.assertContains(response, 'class="topic-card"', count=10)
-        self.assertContains(response, "第 1 位")
-        self.assertContains(response, "第 10 位")
+        self.assertContains(response, 'class="drag-handle"', count=10)
+        self.assertContains(response, 'class="topic-content"', count=10)
         self.assertContains(response, 'data-move="up"')
         self.assertContains(response, 'data-move="down"')
         self.assertContains(response, 'name="ordered_topic_ids"')
@@ -227,7 +227,8 @@ class SurveyViewTests(TestCase):
         self.assertIn('document.addEventListener("drop"', script)
         self.assertIn("let dragOverTarget = null", script)
         self.assertIn("setDragOver(target)", dragover_block)
-        self.assertNotIn("sync();", dragover_block)
+        # sync() is now called during dragover for real-time number updates
+        self.assertIn("sync();", dragover_block)
         self.assertIn("dragging-active", script)
         self.assertIn("drag-over", script)
         self.assertIn(".topic-list.dragging-active", stylesheet)
@@ -245,16 +246,18 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, 'data-reaction="dislike"')
         self.assertContains(response, 'aria-label="赞 小兔 的评论"')
         self.assertContains(response, 'aria-label="踩 小兔 的评论"')
-        self.assertContains(response, 'class="comment-avatar"')
+        self.assertContains(response, 'class="avatar avatar-small"')
         self.assertContains(response, "survey/img/avatar")
         self.assertContains(response, "survey/img/like.png")
         self.assertContains(response, "survey/img/dislike.png")
-        self.assertContains(response, 'class="reaction-icon"', count=2)
+        # New design has 4 reaction-icon instances: 2 in post-actions (emoji), 2 in comments (img)
+        self.assertContains(response, 'class="reaction-icon"', count=4)
         self.assertContains(response, "survey/js/reactions.js")
         self.assertNotContains(response, "dicebear.com")
         self.assertNotContains(response, 'class="comic-thumb')
-        self.assertNotContains(response, "👍")
-        self.assertNotContains(response, "👎")
+        # New design shows emoji thumbs in post-actions
+        self.assertContains(response, "👍")
+        self.assertContains(response, "👎")
         self.assertNotContains(response, "不选择")
         self.assertNotContains(response, 'type="radio"')
         self.assertNotContains(response, 'class="reaction-choice"')
@@ -348,10 +351,10 @@ class SurveyViewTests(TestCase):
         content = response.content.decode("utf-8")
 
         for name in ["小兔", "小鸭", "小狐", "小狮", "小橙", "小鹅", "小兔 2"]:
-            self.assertContains(response, f"<strong>{name}</strong>", html=True)
+            self.assertContains(response, f'<span class="username">{name}</span>', html=True)
         self.assertNotIn("avatar4.png", content)
-        self.assertNotContains(response, "<strong>周明</strong>", html=True)
-        self.assertNotContains(response, "<strong>周明 2</strong>", html=True)
+        self.assertNotContains(response, '<span class="username">周明</span>', html=True)
+        self.assertNotContains(response, '<span class="username">周明 2</span>', html=True)
 
     def test_post_page_saves_comment_interactions(self):
         user, batch, session, round_obj = self.create_round_for_step("post", username="p_post_save_reaction")
@@ -367,9 +370,9 @@ class SurveyViewTests(TestCase):
 
         self.assertIn(".comment-card .reaction-button", stylesheet)
         self.assertIn("width: 30px", stylesheet)
-        self.assertIn("border: 0 !important", stylesheet)
+        self.assertIn("border: 0", stylesheet)
         self.assertIn("background: transparent", stylesheet)
-        self.assertIn("box-shadow: none !important", stylesheet)
+        self.assertIn("box-shadow: none", stylesheet)
         self.assertIn("outline: 0", stylesheet)
         self.assertIn("width: 22px", stylesheet)
 
@@ -379,18 +382,27 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:scale", args=["stance_before"]))
 
         self.assertContains(response, "你的观点")
-        self.assertContains(response, 'class="rating-slider answered"')
+        # New simplified slider structure
+        self.assertContains(response, 'class="scale-slider"')
         self.assertContains(response, 'type="range"')
         self.assertContains(response, 'min="1"')
         self.assertContains(response, 'max="7"')
         self.assertContains(response, 'class="rating-value"')
-        self.assertContains(response, 'type="hidden" name="item_-1" value="1"')
-        self.assertContains(response, 'type="hidden" name="item_-2" value="1"')
+        # Check for hidden inputs with correct names (order may vary)
+        self.assertContains(response, 'name="item_default-agreement"')
+        self.assertContains(response, 'name="item_default-confidence"')
         self.assertContains(response, 'class="soft-alert"')
         self.assertContains(response, 'type="hidden"')
+        # New design has fixed number labels with data-value attributes
+        self.assertContains(response, 'data-value="1"')
+        self.assertContains(response, 'class="slider-numbers"')
+        # Progress bar now uses CSS pseudo-element (::before) instead of separate div
+        # Old elements removed
         self.assertNotContains(response, "未选择")
-        self.assertNotContains(response, 'data-value="1"')
-        self.assertNotContains(response, 'class="rating-track"')
+        self.assertNotContains(response, 'class="rating-readout"')
+        self.assertNotContains(response, 'class="slider-track-fill"')
+
+
 
     def test_rating_script_prompts_gently_before_incomplete_submit(self):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "rating.js").read_text(encoding="utf-8")
