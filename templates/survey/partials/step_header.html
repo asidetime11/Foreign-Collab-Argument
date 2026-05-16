@@ -1,0 +1,5 @@
+<div class="step-route" aria-label="答题进度">
+  {% for number in step_meta.route %}
+    <span class="route-dot{% if step_meta.kind == 'done' or number < step_meta.number %} done{% elif number == step_meta.number %} active{% endif %}"></span>
+  {% endfor %}
+</div>

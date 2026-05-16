@@ -9,3 +9,5 @@ media/
 staticfiles/
 exports/
 .worktrees/
+.superpowers/
+runserver.*.log

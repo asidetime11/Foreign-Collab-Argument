@@ -1,0 +1,70 @@
+{% extends "admin/base_site.html" %}
+{% block content_title %}{% endblock %}
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .admin-home {
+    max-width: 1220px;
+  }
+
+  .home-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 24px;
+    align-items: center;
+    border: 1px solid rgba(23, 71, 93, .18);
+    border-left: 6px solid #176a80;
+    border-radius: 8px;
+    padding: 28px 30px;
+    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 62%, #e7fbff 100%);
+    box-shadow: 0 18px 38px rgba(23, 71, 93, .14);
+  }
+
+  .home-panel h1 {
+    margin: 0 0 10px;
+    font-size: 28px;
+  }
+
+  .home-panel p {
+    max-width: 720px;
+    margin: 0;
+    color: #425466;
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  .home-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .home-actions .button {
+    padding: 10px 16px;
+  }
+
+  @media (max-width: 760px) {
+    .home-panel {
+      grid-template-columns: 1fr;
+    }
+
+    .home-actions {
+      justify-content: flex-start;
+    }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="admin-home">
+  <section class="home-panel">
+    <div>
+      <h1>协同论证平台后台</h1>
+      <p>优先使用研究管理台编辑说明文字、话题材料和 AI 模式，并按用户查看或导出完整研究数据。</p>
+    </div>
+    <div class="home-actions">
+      <a class="button default" href="{% url 'research_admin_dashboard' %}">进入研究管理台</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

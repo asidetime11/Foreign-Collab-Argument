@@ -1,0 +1,206 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} | 协同论证后台{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  :root {
+    --primary: #1e6f86;
+    --secondary: #16475d;
+    --accent: #f4c542;
+    --body-bg: #f6f8fb;
+    --body-fg: #172033;
+    --link-fg: #176a80;
+    --link-hover-color: #0f4c60;
+    --hairline-color: #d8e1ea;
+    --border-color: #d8e1ea;
+    --button-bg: #176a80;
+    --button-hover-bg: #0f4c60;
+    --default-button-bg: #176a80;
+    --default-button-hover-bg: #0f4c60;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(244, 197, 66, .14), transparent 28rem),
+      linear-gradient(180deg, #eef7f8 0, #f7f9fc 18rem, #f6f8fb 100%);
+    color: var(--body-fg);
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+  }
+
+  #header {
+    min-height: 58px;
+    background: linear-gradient(90deg, #17475d, #267b91);
+    color: #fff;
+    box-shadow: 0 12px 28px rgba(23, 71, 93, .18);
+  }
+
+  #branding {
+    display: flex;
+    align-items: center;
+  }
+
+  #site-name a {
+    color: #ffe07a;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  #user-tools,
+  #user-tools a,
+  #logout-form button {
+    color: #eefcff;
+  }
+
+  #logout-form button {
+    border: 0;
+    background: transparent;
+  }
+
+  .breadcrumbs {
+    border: 0;
+    background: #143d50;
+    color: #dceff4;
+    padding: 13px 40px;
+  }
+
+  .breadcrumbs a {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  #nav-sidebar,
+  .toggle-nav-sidebar {
+    display: none;
+  }
+
+  .main.shifted > #nav-sidebar + .content,
+  .main > .content {
+    max-width: none;
+  }
+
+  #content {
+    padding: 28px 40px 44px;
+  }
+
+  h1 {
+    color: #172033;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  a.button,
+  .button,
+  input[type=submit],
+  button.default,
+  input[type=submit].default,
+  .submit-row input.default {
+    border: 0;
+    border-radius: 8px;
+    background: #176a80;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 8px 18px rgba(23, 106, 128, .18);
+  }
+
+  a.button:hover,
+  .button:hover,
+  input[type=submit]:hover,
+  button.default:hover,
+  input[type=submit].default:hover {
+    background: #0f4c60;
+    color: #fff;
+  }
+
+  .module,
+  .inline-group,
+  div.form-row,
+  fieldset.module {
+    border-radius: 8px;
+  }
+
+  fieldset.module,
+  .inline-group {
+    overflow: hidden;
+    border: 1px solid rgba(23, 71, 93, .14);
+    background: #fff;
+    box-shadow: 0 14px 30px rgba(23, 71, 93, .08);
+  }
+
+  fieldset.module h2,
+  .inline-group h2,
+  .module h2 {
+    background: #eef7f8;
+    color: #172033;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .aligned label,
+  .inline-group th {
+    color: #172033;
+    font-weight: 700;
+  }
+
+  .inline-group .tabular {
+    overflow-x: auto;
+  }
+
+  .inline-group table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .inline-group thead th {
+    border-bottom: 1px solid #d8e6ed;
+    background: #f5fafb;
+    padding: 12px 14px;
+  }
+
+  .inline-group tbody td {
+    border-bottom: 1px solid #e4ebf2;
+    background: #fff;
+    padding: 12px 14px;
+    vertical-align: top;
+  }
+
+  .inline-group tbody tr:nth-child(even) td {
+    background: #f9fcfd;
+  }
+
+  .inline-group textarea {
+    min-width: 240px;
+    min-height: 82px;
+  }
+
+  .inline-group input[type="text"],
+  .inline-group input[type="number"] {
+    min-width: 110px;
+  }
+
+  .submit-row {
+    border: 1px solid rgba(23, 71, 93, .14);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 14px 30px rgba(23, 71, 93, .08);
+  }
+
+  input,
+  textarea,
+  select,
+  .vTextField {
+    border-color: #c9d7e4;
+    border-radius: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">协同论证后台</a></div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}

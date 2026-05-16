@@ -1,13 +1,25 @@
 {% extends "base.html" %}
+{% block title %}选择对话模式{% endblock %}
 {% block content %}
-<section class="panel">
-  <h1>选择 AI 模式</h1>
+<section class="task-page task-page-mode">
+  {% include "survey/partials/step_header.html" %}
+  <div class="task-hero compact">
+    <p class="step-label">{{ step_meta.label }}</p>
+    <h1>{{ step_meta.title }}</h1>
+    <p class="intro-text">接下来可以选择一种方式和人工智能聊一聊，也可以跳过。</p>
+  </div>
   <form method="post" class="mode-grid">
     {% csrf_token %}
     {% for mode in modes %}
-      <button name="selected_mode" value="{{ mode.pk }}" type="submit">{{ mode.name_zh }}</button>
+      <button class="mode-card" name="selected_mode" value="{{ mode.pk }}" type="submit">
+        <strong>{{ mode.name_zh }}</strong>
+        <span>{{ mode.prompt_zh|truncatechars:42 }}</span>
+      </button>
     {% endfor %}
-    <button name="selected_mode" value="skip" type="submit">跳过</button>
+    <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit">
+      <strong>跳过</strong>
+      <span>不使用人工智能，直接进入下一站。</span>
+    </button>
   </form>
 </section>
 {% endblock %}

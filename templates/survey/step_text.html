@@ -1,16 +1,29 @@
 {% extends "base.html" %}
 {% load static %}
+{% block title %}{{ step_meta.title }}{% endblock %}
 {% block content %}
-<section class="panel">
-  <h1>写下你的想法</h1>
-  <form method="post" class="stack">
+<section class="task-page task-page-text">
+  {% include "survey/partials/step_header.html" %}
+  <div class="task-hero compact">
+    <p class="step-label">{{ step_meta.label }}</p>
+    <h1>{{ step_meta.title }}</h1>
+    {% if step == "final_text" %}
+      <p class="intro-text">请再次写下你现在的想法，可以和之前相同，也可以不同。</p>
+    {% else %}
+      <p class="intro-text">把你现在想到的写下来就好，不需要标准答案。</p>
+    {% endif %}
+  </div>
+  <form method="post" class="task-form note-form">
     {% csrf_token %}
-    {{ form.final_text }}
+    <div class="thought-note">
+      <textarea name="final_text" required data-no-paste="true" placeholder="请直接输入你的想法，不要复制粘贴。">{{ form.final_text.value|default_if_none:"" }}</textarea>
+    </div>
     {{ form.input_method }}
     {{ form.transcribe_model }}
-    <label>{{ form.was_edited }} 我编辑过转写文本</label>
-    <button type="button" data-recorder>录音转文字</button>
-    <button class="primary" type="submit">提交</button>
+    <div class="text-actions">
+      <button type="button" data-recorder>语音输入</button>
+      <button class="primary" type="submit">保存想法</button>
+    </div>
   </form>
 </section>
 {% endblock %}

@@ -1,15 +1,31 @@
 {% extends "base.html" %}
 {% load static %}
+{% block title %}与人工智能对话{% endblock %}
 {% block content %}
-<section class="panel chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}">
-  <h1>AI 对话</h1>
-  <div id="chat-log" class="chat-log"></div>
-  <form id="chat-form">
+<section class="task-page task-page-chat chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}" data-remaining-seconds="{{ remaining_seconds }}">
+  {% include "survey/partials/step_header.html" %}
+  <div class="chat-head">
+    <div>
+      <p class="step-label">{{ step_meta.label }}</p>
+      <h1>{{ step_meta.title }}</h1>
+    </div>
+    <div class="timer">剩余时间 <strong data-countdown>{{ minutes }}:00</strong></div>
+  </div>
+  <div id="chat-log" class="chat-log" aria-live="polite">
+    {% for message in chat_messages %}
+      <article class="chat-message {{ message.role }}" data-chat-role="{{ message.role }}">
+        <span class="chat-speaker">{% if message.role == "participant" %}你{% else %}AI{% endif %}</span>
+        <div class="bubble {{ message.role }}{% if message.error_message %} error{% endif %}"{% if message.role == "assistant" %} data-markdown-source{% endif %}>{% if message.error_message and not message.content %}暂时没有收到稳定回复，请稍后再试一次。{% else %}{{ message.content }}{% endif %}</div>
+      </article>
+    {% endfor %}
+  </div>
+  <p class="chat-status" data-chat-status hidden>正在整理回复...</p>
+  <form id="chat-form" class="chat-input-row">
     {% csrf_token %}
-    <input name="message" autocomplete="off" placeholder="输入消息">
+    <input name="message" autocomplete="off" data-no-paste="true" placeholder="直接输入你想聊的内容">
     <button type="submit">发送</button>
   </form>
-  <form method="post" class="stack">{% csrf_token %}<button class="primary" type="submit">提前结束</button></form>
+  <form method="post" class="chat-finish">{% csrf_token %}<button class="primary" type="submit">完成这轮对话</button></form>
 </section>
 {% endblock %}
 {% block scripts %}<script src="{% static 'survey/js/chat.js' %}"></script>{% endblock %}

@@ -1,21 +1,36 @@
 {% extends "base.html" %}
 {% load static %}
+{% block title %}话题排序{% endblock %}
 {% block content %}
-<section class="panel">
-  <h1>话题排序</h1>
-  <p>{{ session.batch_snapshot.intro_zh }}</p>
-  <form method="post" class="stack">
+<section class="task-page task-page-sort">
+  {% include "survey/partials/step_header.html" %}
+  <div class="task-hero">
+    <div>
+      <p class="step-label">{{ step_meta.label }}</p>
+      <h1>{{ step_meta.title }}</h1>
+      <p class="intro-text">{{ topic_order_intro|linebreaksbr }}</p>
+    </div>
+  </div>
+  <p class="sort-direction">从上到下：最重要 → 最不重要</p>
+  <form method="post" class="task-form">
     {% csrf_token %}
     {{ form.ordered_topic_ids }}
-    <ol id="topic-list" class="sortable">
+    <ol id="topic-list" class="topic-list" aria-label="话题排序">
       {% for topic in topics %}
-        <li draggable="true" data-topic-id="{{ topic.id }}">
-          <span>{{ topic.title }}</span>
-          <div class="row-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button></div>
+        <li class="topic-card" draggable="true" data-topic-id="{{ topic.id }}">
+          <span class="topic-rank">第 {{ forloop.counter }} 位</span>
+          <span class="topic-title">{{ topic.title }}</span>
+          <span class="topic-actions">
+            <button type="button" data-move="up" aria-label="上移 {{ topic.title }}">↑</button>
+            <button type="button" data-move="down" aria-label="下移 {{ topic.title }}">↓</button>
+          </span>
         </li>
       {% endfor %}
     </ol>
-    <button class="primary" type="submit">提交排序</button>
+    <div class="sticky-submit">
+      <strong>提交后将进入下一站，排序不能返回修改。</strong>
+      <button class="primary" type="submit">确认排序</button>
+    </div>
   </form>
 </section>
 {% endblock %}

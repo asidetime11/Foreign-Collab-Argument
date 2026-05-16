@@ -10,6 +10,24 @@ from .clients import chat_stream, transcribe_audio
 from .prompts import build_system_prompt
 
 
+def _sse_message(data, event=None):
+    lines = []
+    if event:
+        lines.append(f"event: {event}")
+    for line in str(data).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        lines.append(f"data: {line}")
+    return "\n".join(lines) + "\n\n"
+
+
+def _friendly_chat_error(exc):
+    message = str(exc)
+    if "429" in message or "api_limit" in message or "负载已饱和" in message:
+        return "AI 服务现在比较拥挤，请稍后再试一次。"
+    if "401" in message or "未提供令牌" in message or "Unauthorized" in message:
+        return "AI 服务密钥没有正确配置，请联系管理员检查后台设置。"
+    return "暂时没有收到稳定回复，请稍后再试一次。"
+
+
 @login_required
 @require_POST
 def chat(request, round_id):
@@ -33,7 +51,7 @@ def chat(request, round_id):
     ]
     for message in round_obj.conversation_messages.order_by("created_at"):
         role = "assistant" if message.role == "assistant" else "user"
-        if message.role in {"assistant", "participant"}:
+        if message.role in {"assistant", "participant"} and message.content.strip():
             prior_messages.append({"role": role, "content": message.content})
 
     def event_stream():
@@ -41,7 +59,7 @@ def chat(request, round_id):
         try:
             for chunk in chat_stream(prior_messages, settings.DEFAULT_CHAT_MODEL):
                 chunks.append(chunk)
-                yield f"data: {chunk}\n\n"
+                yield _sse_message(chunk)
             final = "".join(chunks)
             ConversationMessage.objects.create(
                 round=round_obj,
@@ -51,8 +69,9 @@ def chat(request, round_id):
                 ai_mode_name=round_obj.ai_mode.name_zh,
                 model_name=settings.DEFAULT_CHAT_MODEL,
             )
-            yield "event: done\ndata: ok\n\n"
+            yield _sse_message("ok", event="done")
         except Exception as exc:  # pragma: no cover - network failure path.
+            friendly_message = _friendly_chat_error(exc)
             ConversationMessage.objects.create(
                 round=round_obj,
                 role="assistant",
@@ -62,9 +81,12 @@ def chat(request, round_id):
                 model_name=settings.DEFAULT_CHAT_MODEL,
                 error_message=str(exc),
             )
-            yield f"event: error\ndata: {exc}\n\n"
+            yield _sse_message(friendly_message, event="error")
 
-    return StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
 
 
 @login_required

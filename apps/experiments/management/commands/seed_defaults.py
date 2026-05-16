@@ -1,7 +1,17 @@
 from django.core.management.base import BaseCommand
 
-from apps.experiments.defaults import DEFAULT_AI_MODES, DEFAULT_SCALE_ITEMS, DEFAULT_TOPICS
+from apps.experiments.defaults import (
+    DEFAULT_AI_MODES,
+    DEFAULT_SCALE_ITEMS,
+    DEFAULT_TOPICS,
+    DEFAULT_TOPIC_ORDER_INTRO_EN,
+    DEFAULT_TOPIC_ORDER_INTRO_ZH,
+)
 from apps.experiments.models import AIMode, ExperimentBatch, RatingScaleConfig, ScaleItem, Topic, TopicComment
+
+
+OLD_DEMO_INTRO_ZH = "请按你的真实想法对以下话题排序。提交后不可返回修改。"
+OLD_DEMO_INTRO_EN = "Please rank the following topics by your own view. You cannot return after submitting."
 
 
 class Command(BaseCommand):
@@ -11,12 +21,21 @@ class Command(BaseCommand):
         batch, _ = ExperimentBatch.objects.get_or_create(
             name="示例批次 / Demo Batch",
             defaults={
-                "intro_zh": "请按你的真实想法对以下话题排序。提交后不可返回修改。",
-                "intro_en": "Please rank the following topics by your own view. You cannot return after submitting.",
+                "intro_zh": DEFAULT_TOPIC_ORDER_INTRO_ZH,
+                "intro_en": DEFAULT_TOPIC_ORDER_INTRO_EN,
                 "outro_zh": "答题已完成，感谢参与。",
                 "outro_en": "The study is complete. Thank you for participating.",
             },
         )
+        updates = {}
+        if batch.intro_zh in {"", OLD_DEMO_INTRO_ZH}:
+            updates["intro_zh"] = DEFAULT_TOPIC_ORDER_INTRO_ZH
+        if batch.intro_en in {"", OLD_DEMO_INTRO_EN}:
+            updates["intro_en"] = DEFAULT_TOPIC_ORDER_INTRO_EN
+        if updates:
+            for field, value in updates.items():
+                setattr(batch, field, value)
+            batch.save(update_fields=list(updates))
         RatingScaleConfig.objects.get_or_create(batch=batch)
         for index, (title_zh, title_en) in enumerate(DEFAULT_TOPICS, start=1):
             topic, _ = Topic.objects.get_or_create(

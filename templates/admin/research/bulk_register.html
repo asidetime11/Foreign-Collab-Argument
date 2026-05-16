@@ -1,0 +1,259 @@
+{% extends "admin/base_site.html" %}
+{% block content_title %}{% endblock %}
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .bulk-shell {
+    display: grid;
+    gap: 18px;
+    max-width: 980px;
+  }
+
+  .bulk-hero,
+  .bulk-card {
+    border: 1px solid rgba(23, 71, 93, .16);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 34px rgba(23, 71, 93, .10);
+  }
+
+  .bulk-hero {
+    padding: 24px 26px;
+    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 70%, #e7fbff 100%);
+    border-left: 6px solid #176a80;
+  }
+
+  .bulk-hero h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+  }
+
+  .bulk-hero p {
+    margin: 0;
+    color: #516171;
+    line-height: 1.8;
+  }
+
+  .bulk-card {
+    display: grid;
+    gap: 18px;
+    padding: 24px 26px;
+  }
+
+  .bulk-field {
+    display: grid;
+    gap: 8px;
+  }
+
+  .bulk-field label {
+    color: #172033;
+    font-weight: 700;
+  }
+
+  .bulk-input,
+  .bulk-textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #c9d7e4;
+    border-radius: 8px;
+    background: #fbfdff;
+    color: #172033;
+    font-size: 15px;
+  }
+
+  .bulk-textarea {
+    min-height: 220px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+
+  .bulk-help {
+    margin: 0;
+    color: #647487;
+    line-height: 1.7;
+  }
+
+  .bulk-generator {
+    display: grid;
+    grid-template-columns: minmax(150px, 190px) auto auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: end;
+    padding: 14px;
+    border: 1px solid #d8e6ed;
+    border-radius: 8px;
+    background: #f7fbfc;
+  }
+
+  .bulk-generator label {
+    display: grid;
+    gap: 7px;
+    color: #172033;
+    font-weight: 700;
+  }
+
+  .bulk-count {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #c9d7e4;
+    border-radius: 8px;
+    background: #fff;
+    color: #172033;
+  }
+
+  .bulk-secondary {
+    border: 1px solid #b9ced8;
+    border-radius: 8px;
+    background: #fff;
+    color: #176a80;
+    font-weight: 700;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+
+  .bulk-secondary:hover {
+    border-color: #176a80;
+    background: #eef8fa;
+  }
+
+  .bulk-generator-note {
+    margin: 0;
+    color: #647487;
+    line-height: 1.6;
+  }
+
+  .bulk-errors {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #fff1f0;
+    color: #9f2a2a;
+  }
+
+  .bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .bulk-actions button,
+  .bulk-actions .button {
+    padding: 10px 16px;
+  }
+
+  .bulk-create {
+    background: #229667;
+    box-shadow: 0 8px 18px rgba(34, 150, 103, .18);
+  }
+
+  .bulk-create:hover {
+    background: #18784f;
+  }
+
+  @media (max-width: 780px) {
+    .bulk-generator {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="bulk-shell">
+  <section class="bulk-hero">
+    <h1>批量注册新用户</h1>
+    <p>输入或随机生成用户名后，可以先导出账号 Excel 留档，再确认创建账号。</p>
+  </section>
+
+  <form method="post" class="bulk-card">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="bulk-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="bulk-field">
+      <label for="{{ form.initial_password.id_for_label }}">{{ form.initial_password.label }}</label>
+      {{ form.initial_password }}
+      {% if form.initial_password.errors %}<div class="bulk-errors">{{ form.initial_password.errors }}</div>{% endif %}
+    </div>
+    <div class="bulk-field">
+      <label for="{{ form.usernames.id_for_label }}">{{ form.usernames.label }}</label>
+      <p class="bulk-help">{{ form.usernames.help_text }}</p>
+      <div class="bulk-generator" aria-label="随机生成用户名">
+        <label for="random-count">
+          生成数量
+          <input id="random-count" class="bulk-count" type="number" min="1" max="500" value="10">
+        </label>
+        <button class="bulk-secondary" type="button" data-target="{{ form.usernames.id_for_label }}" id="random-usernames-button">随机生成 10 个用户名</button>
+        <button class="bulk-secondary" type="button" data-target="{{ form.usernames.id_for_label }}" id="clear-usernames-button">清空列表</button>
+        <p class="bulk-generator-note">生成后仍可手动修改。用户名会使用 user 加日期和随机编号，避免一行行输入。</p>
+      </div>
+      {{ form.usernames }}
+      {% if form.usernames.errors %}<div class="bulk-errors">{{ form.usernames.errors }}</div>{% endif %}
+    </div>
+    <div class="bulk-actions">
+      <button type="submit" class="default" name="action" value="export">导出账号 Excel</button>
+      <button type="submit" class="default bulk-create" name="action" value="create">确认创建账号</button>
+      <a class="button" href="{% url 'research_admin_dashboard' %}">返回管理台</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block extrabody %}
+{{ block.super }}
+<script>
+  window.adminGeneratedUsernames = true;
+
+  (function () {
+    const countInput = document.getElementById("random-count");
+    const generateButton = document.getElementById("random-usernames-button");
+    const clearButton = document.getElementById("clear-usernames-button");
+
+    function usernameSuffix() {
+      const now = new Date();
+      const date = [
+        String(now.getFullYear()).slice(-2),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0"),
+      ].join("");
+      return date;
+    }
+
+    function existingNames(target) {
+      return new Set(
+        target.value
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+      );
+    }
+
+    function randomCode() {
+      return Math.floor(Math.random() * 9000 + 1000);
+    }
+
+    generateButton.addEventListener("click", function () {
+      const target = document.getElementById(generateButton.dataset.target);
+      const count = Math.max(1, Math.min(Number(countInput.value || 10), 500));
+      const names = existingNames(target);
+      const date = usernameSuffix();
+      while (names.size < count) {
+        names.add(`user${date}${randomCode()}`);
+      }
+      target.value = Array.from(names).slice(0, count).join("\n");
+      generateButton.textContent = `随机生成 ${count} 个用户名`;
+    });
+
+    countInput.addEventListener("input", function () {
+      const count = Math.max(1, Math.min(Number(countInput.value || 10), 500));
+      generateButton.textContent = `随机生成 ${count} 个用户名`;
+    });
+
+    clearButton.addEventListener("click", function () {
+      const target = document.getElementById(clearButton.dataset.target);
+      target.value = "";
+      target.focus();
+    });
+  })();
+</script>
+{% endblock %}

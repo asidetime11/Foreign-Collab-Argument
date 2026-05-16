@@ -12,10 +12,16 @@
     return node ? node.content : "";
   }
 
+  function appendTranscription(text) {
+    const current = textarea.value.trimEnd();
+    textarea.value = current ? `${current}\n${text}` : text;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   button.addEventListener("click", async function () {
     if (recorder && recorder.state === "recording") {
       recorder.stop();
-      button.textContent = "录音转文字";
+      button.textContent = "语音输入";
       return;
     }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -28,7 +34,7 @@
       const response = await fetch("/ai/transcribe/", { method: "POST", headers: { "X-CSRFToken": csrfToken() }, body: data });
       if (response.ok) {
         const payload = await response.json();
-        textarea.value = payload.text;
+        appendTranscription(payload.text);
         method.value = "speech_to_text";
         model.value = payload.model;
       }

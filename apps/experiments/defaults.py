@@ -1,3 +1,18 @@
+DEFAULT_TOPIC_ORDER_INTRO_ZH = (
+    "我们正在进行一项关于中国青少年的研究，希望了解高中生们对各种复杂问题的看法，十分需要你的帮助。"
+    "我们不会评判你的回答的对错，你的回答也不会影响在校成绩。你的老师、家长和同学都不会看到你的实名回答，"
+    "只有研究团队的成员会将你的回答用于研究用途。\n"
+    "现在，请按照你的想法从（1）对你最重要 -- （10）对你最不重要，为下列话题进行排序。"
+)
+
+DEFAULT_TOPIC_ORDER_INTRO_EN = (
+    "We are conducting a study about Chinese adolescents and would like to understand high school students' views "
+    "on complex social questions. Your help is very important. We will not judge whether your answers are right or "
+    "wrong, and your answers will not affect your school grades. Your teachers, parents, and classmates will not see "
+    "your named responses; only the research team will use them for research purposes.\n"
+    "Now, please rank the topics below from (1) most important to you to (10) least important to you."
+)
+
 DEFAULT_AI_MODES = [
     {
         "name_zh": "提出不同观点",

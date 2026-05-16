@@ -5,7 +5,7 @@
   <h1>注册参与者账号</h1>
   <form method="post" class="stack">
     {% csrf_token %}
-    {{ form.as_p }}
+    {% include "accounts/partials/form_fields.html" %}
     <button class="primary" type="submit">注册</button>
     <p>已有账号？<a href="{% url 'login' %}">返回登录</a></p>
   </form>

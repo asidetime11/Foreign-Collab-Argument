@@ -79,7 +79,7 @@ DATABASES = {
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = "zh-hans"
-LANGUAGES = [("zh-hans", "中文"), ("en", "English")]
+LANGUAGES = [("zh-hans", "中文")]
 TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = True

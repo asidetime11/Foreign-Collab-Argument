@@ -1,22 +1,54 @@
 {% extends "base.html" %}
 {% load static %}
+{% block title %}{{ step_meta.title }}{% endblock %}
 {% block content %}
-<section class="panel">
-  <h1>评分</h1>
-  <form method="post" class="stack rating-form">
+<section class="task-page task-page-scale task-{{ step }}">
+  {% include "survey/partials/step_header.html" %}
+  <div class="task-hero compact">
+    <p class="step-label">{{ step_meta.label }}</p>
+    <h1>{{ step_meta.title }}</h1>
+    {% if statement %}<p class="statement-card">{{ statement }}</p>{% endif %}
+    {% if step == "emotion" %}
+      <p class="intro-text">像调音台一样标出你现在的感受。每一项都需要选择。</p>
+    {% elif step == "ai_eval" %}
+      <p class="intro-text">给刚才的对话伙伴打几个标签。每一项都需要选择。</p>
+    {% elif step == "stance_after" %}
+      <p class="intro-text">前面的回答已收起，请根据现在的想法重新选择。</p>
+    {% else %}
+      <p class="intro-text">请根据当前想法完成下面两个判断。</p>
+    {% endif %}
+  </div>
+  <form method="post" class="task-form rating-form">
     {% csrf_token %}
     {% for item in items %}
-      <fieldset class="rating" data-min="{{ item.min_value }}" data-max="{{ item.max_value }}">
+      <fieldset class="rating-card answered" data-min="{{ item.min_value }}" data-max="{{ item.max_value }}">
         <legend>{{ item.label_zh }}</legend>
-        <input type="hidden" name="item_{{ item.pk }}" required>
-        <div class="rating-buttons">
-          {% for value in "1234567" %}
-            <button type="button" data-value="{{ value }}">{{ value }}</button>
-          {% endfor %}
+        <input type="hidden" name="item_{{ item.pk }}" value="{{ item.min_value }}" required>
+        <div class="rating-slider answered" role="group" aria-label="{{ item.label_zh }}">
+          <div class="rating-readout" aria-live="polite">
+            <span class="rating-value">{{ item.min_value }}</span>
+          </div>
+          <input
+            type="range"
+            min="{{ item.min_value }}"
+            max="{{ item.max_value }}"
+            step="1"
+            value="{{ item.min_value }}"
+            aria-label="{{ item.label_zh }}"
+          >
+          <div class="rating-scale-labels" aria-hidden="true">
+            {% for value in item.values %}
+              <span>{{ value }}</span>
+            {% endfor %}
+          </div>
         </div>
       </fieldset>
     {% endfor %}
-    <button class="primary" type="submit">提交</button>
+    <p class="soft-alert" role="status" aria-live="polite" hidden>请先完成所有滑杆，再继续。</p>
+    <div class="sticky-submit">
+      <strong>每一项都选择后才能继续。</strong>
+      <button class="primary" type="submit">继续</button>
+    </div>
   </form>
 </section>
 {% endblock %}

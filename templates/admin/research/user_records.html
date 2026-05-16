@@ -1,0 +1,267 @@
+{% extends "admin/base_site.html" %}
+{% block content_title %}{% endblock %}
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .records-shell {
+    display: grid;
+    gap: 18px;
+    max-width: 1220px;
+  }
+
+  .records-hero,
+  .records-table,
+  .records-summary-card {
+    border: 1px solid rgba(23, 71, 93, .16);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 34px rgba(23, 71, 93, .10);
+  }
+
+  .records-hero {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 26px;
+    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 72%, #e7fbff 100%);
+    border-left: 6px solid #176a80;
+  }
+
+  .records-hero h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+  }
+
+  .records-hero p {
+    margin: 0;
+    color: #516171;
+  }
+
+  .records-hero .button {
+    padding: 10px 16px;
+    white-space: nowrap;
+  }
+
+  .records-table {
+    overflow: hidden;
+  }
+
+  .records-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .records-table th {
+    background: #eef7f8;
+    color: #172033;
+    font-weight: 700;
+  }
+
+  .records-table th,
+  .records-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid #e4ebf2;
+  }
+
+  .records-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .records-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e4ebf2;
+    background: #fff;
+  }
+
+  .records-toolbar p {
+    margin: 0;
+    color: #647487;
+  }
+
+  .danger-button {
+    border: 0;
+    border-radius: 8px;
+    background: #b3261e;
+    color: #fff;
+    font-weight: 700;
+    padding: 9px 13px;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(179, 38, 30, .16);
+  }
+
+  .danger-button:hover {
+    background: #8f1d17;
+  }
+
+  .danger-button.inline {
+    padding: 7px 10px;
+    box-shadow: none;
+  }
+
+  .muted-action {
+    color: #647487;
+    font-weight: 700;
+  }
+
+  .select-cell {
+    width: 44px;
+    text-align: center;
+  }
+
+  .records-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .records-summary-card {
+    display: grid;
+    gap: 8px;
+    padding: 18px;
+  }
+
+  .records-summary-card span {
+    color: #657486;
+  }
+
+  .records-summary-card strong {
+    color: #172033;
+    font-size: 26px;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #eef7f8;
+    color: #176a80;
+    font-weight: 700;
+  }
+
+  .status-badge.done {
+    background: #dff7ee;
+    color: #18784f;
+  }
+
+  .status-badge.idle {
+    background: #f4f6f8;
+    color: #647487;
+  }
+
+  @media (max-width: 760px) {
+    .records-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .records-summary {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="records-shell">
+  <section class="records-hero">
+    <div>
+      <h1>用户数据</h1>
+      <p>按用户查看流程进度，并在需要时导出完整研究记录。</p>
+    </div>
+    <a class="button default" href="{% url 'research_admin_export_all' %}">一键导出全部用户数据</a>
+  </section>
+  <section class="records-summary" aria-label="用户概览">
+    <div class="records-summary-card"><span>参与账号</span><strong>{{ rows|length }}</strong></div>
+    <div class="records-summary-card"><span>未开始账号</span><strong>{{ idle_count }}</strong></div>
+    <div class="records-summary-card"><span>已完成账号</span><strong>{{ completed_count }}</strong></div>
+  </section>
+  <div class="records-table">
+    <form method="post" action="{% url 'research_admin_delete_users' %}" id="records-delete-form">
+      {% csrf_token %}
+      <div class="records-toolbar">
+        <p>勾选账号后可以批量删除；删除会同时移除该用户的答题记录。</p>
+        <button class="danger-button" type="submit" data-confirm="确认删除选中的参与者账号吗？">批量删除选中用户</button>
+      </div>
+    <table>
+      <thead>
+      <tr>
+        <th class="select-cell"><input type="checkbox" id="select-all-users" aria-label="选择全部用户"></th>
+        <th>用户名</th>
+        <th>称呼/姓名</th>
+        <th>账号状态</th>
+        <th>当前步骤</th>
+        <th>轮次数</th>
+        <th>开始时间</th>
+        <th>完成时间</th>
+        <th>操作</th>
+      </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="select-cell">
+              {% if row.can_delete %}
+                <input type="checkbox" name="user_ids" value="{{ row.user.pk }}" aria-label="选择 {{ row.user.username }}">
+              {% endif %}
+            </td>
+            <td>{{ row.user.username }}</td>
+            <td>{{ row.display_name|default:"-" }}</td>
+            <td>
+              <span class="status-badge{% if row.status == '未开始' %} idle{% elif row.status == '已完成' %} done{% endif %}">{{ row.status }}</span>
+            </td>
+            <td>{{ row.current_step }}</td>
+            <td>{{ row.round_count }}</td>
+            <td>{{ row.started_at|default:"-" }}</td>
+            <td>{{ row.completed_at|default:"-" }}</td>
+            <td>
+              {% if row.can_delete %}
+                <button
+                  class="danger-button inline"
+                  type="submit"
+                  formaction="{% url 'research_admin_delete_user' row.user.pk %}"
+                  data-confirm="确认删除 {{ row.user.username }} 吗？"
+                >删除</button>
+              {% else %}
+                <span class="muted-action">不可删除</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9">还没有参与者账号。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extrabody %}
+{{ block.super }}
+<script>
+  (function () {
+    const form = document.getElementById("records-delete-form");
+    const selectAll = document.getElementById("select-all-users");
+    if (selectAll) {
+      selectAll.addEventListener("change", function () {
+        form.querySelectorAll('input[name="user_ids"]').forEach((checkbox) => {
+          checkbox.checked = selectAll.checked;
+        });
+      });
+    }
+    form.addEventListener("submit", function (event) {
+      const submitter = event.submitter;
+      const message = submitter ? submitter.dataset.confirm : "";
+      if (message && !window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
+  })();
+</script>
+{% endblock %}

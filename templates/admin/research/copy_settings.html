@@ -1,0 +1,104 @@
+{% extends "admin/base_site.html" %}
+{% block content_title %}{% endblock %}
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .copy-shell {
+    max-width: 940px;
+    display: grid;
+    gap: 18px;
+  }
+
+  .copy-hero,
+  .copy-card {
+    border: 1px solid rgba(23, 71, 93, .16);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 16px 34px rgba(23, 71, 93, .10);
+  }
+
+  .copy-hero {
+    padding: 24px 26px;
+    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 70%, #e7fbff 100%);
+    border-left: 6px solid #176a80;
+  }
+
+  .copy-hero h1 {
+    margin: 0 0 8px;
+    font-size: 26px;
+  }
+
+  .copy-hero p {
+    margin: 0;
+    color: #516171;
+    line-height: 1.8;
+  }
+
+  .copy-card {
+    padding: 24px 26px;
+  }
+
+  .copy-field {
+    display: grid;
+    gap: 10px;
+  }
+
+  .copy-label {
+    color: #172033;
+    font-weight: 700;
+  }
+
+  .copy-help {
+    margin: 0;
+    color: #647487;
+    line-height: 1.7;
+  }
+
+  .copy-textarea {
+    width: 100%;
+    min-height: 180px;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border: 1px solid #c9d7e4;
+    border-radius: 8px;
+    background: #fbfdff;
+    color: #172033;
+    font-size: 15px;
+    line-height: 1.7;
+    resize: vertical;
+  }
+
+  .copy-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .copy-actions button,
+  .copy-actions .button {
+    padding: 10px 16px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="copy-shell">
+  <section class="copy-hero">
+    <h1>编辑第一步说明</h1>
+    <p>这段文字会显示在参与者进行话题排序前，用来交代排序任务和提交后的不可返回规则。</p>
+  </section>
+  <form method="post" class="copy-card">
+    {% csrf_token %}
+    <div class="copy-field">
+      <label class="copy-label" for="{{ form.intro_zh.id_for_label }}">{{ form.intro_zh.label }}</label>
+      <p class="copy-help">建议保持简短明确，只保留参与者完成排序所需的信息。</p>
+      {{ form.intro_zh }}
+      {{ form.intro_zh.errors }}
+    </div>
+    <div class="copy-actions">
+      <button type="submit" class="default">保存说明文字</button>
+      <a class="button" href="{% url 'research_admin_dashboard' %}">返回管理台</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

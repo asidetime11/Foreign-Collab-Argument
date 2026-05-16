@@ -1,25 +1,57 @@
 {% extends "base.html" %}
+{% load static %}
+{% block title %}阅读帖子与评论{% endblock %}
 {% block content %}
-<section class="post-card">
-  <h1>{{ material.title }}</h1>
-  <p>{{ material.post_body }}</p>
+<section class="task-page task-page-post">
+  {% include "survey/partials/step_header.html" %}
+  <div class="task-hero compact">
+    <p class="step-label">{{ step_meta.label }}</p>
+    <h1>{{ step_meta.title }}</h1>
+    <p class="intro-text">读完帖子和留言后，可以给每条留言点一个正大拇指或倒大拇指。</p>
+  </div>
+  <article class="post-card">
+    <h2>{{ material.title }}</h2>
+    <p>{{ material.post_body }}</p>
+  </article>
+  <form method="post" class="task-form">
+    {% csrf_token %}
+    <section class="comments" aria-label="评论">
+      {% for comment in material.comments %}
+        <article class="comment-card">
+          <img class="comment-avatar" alt="" src="{% static 'survey/img/' %}{{ comment.avatar_file }}">
+          <div class="comment-body">
+            <div class="comment-meta"><strong>{{ comment.author }}</strong><span>{{ comment.relative_time }} · {{ comment.like_count }} 赞</span></div>
+            <p>{{ comment.body }}</p>
+            <div class="reaction-group">
+              <input type="hidden" name="comment_{{ comment.id }}" value="none">
+              <button
+                class="reaction-button"
+                data-reaction="like"
+                type="button"
+                aria-label="赞 {{ comment.author }} 的评论"
+                aria-pressed="false"
+              >
+                <img class="reaction-icon" src="{% static 'survey/img/like.png' %}" alt="">
+              </button>
+              <button
+                class="reaction-button"
+                data-reaction="dislike"
+                type="button"
+                aria-label="踩 {{ comment.author }} 的评论"
+                aria-pressed="false"
+              >
+                <img class="reaction-icon" src="{% static 'survey/img/dislike.png' %}" alt="">
+              </button>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+    <div class="sticky-submit">
+      <strong>评论互动不是必选项，读完即可继续。</strong>
+      <button class="primary" type="submit">继续</button>
+    </div>
+  </form>
 </section>
-<form method="post" class="stack">
-  {% csrf_token %}
-  <section class="comments">
-    {% for comment in material.comments %}
-      <article class="comment">
-        <img alt="" src="https://api.dicebear.com/8.x/thumbs/svg?seed={{ comment.avatar_seed }}">
-        <div>
-          <strong>{{ comment.author }}</strong><span>{{ comment.relative_time }} · {{ comment.like_count }} 赞</span>
-          <p>{{ comment.body }}</p>
-          <label><input type="radio" name="comment_{{ comment.id }}" value="none" checked> 无操作</label>
-          <label><input type="radio" name="comment_{{ comment.id }}" value="like"> 赞</label>
-          <label><input type="radio" name="comment_{{ comment.id }}" value="dislike"> 踩</label>
-        </div>
-      </article>
-    {% endfor %}
-  </section>
-  <button class="primary" type="submit">继续</button>
-</form>
 {% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/reactions.js' %}"></script>{% endblock %}

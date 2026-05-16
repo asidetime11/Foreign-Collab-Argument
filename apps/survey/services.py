@@ -27,6 +27,9 @@ def get_or_create_session(user, language="zh-hans"):
             "topic_order_snapshot": _topic_snapshots(profile.batch),
         },
     )
+    if session.language != "zh-hans":
+        session.language = "zh-hans"
+        session.save(update_fields=["language"])
     return session
 
 
