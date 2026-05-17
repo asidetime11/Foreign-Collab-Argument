@@ -1,9 +1,11 @@
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse, StreamingHttpResponse
 from django.shortcuts import redirect
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from apps.survey.models import ConversationMessage, TopicRound
 
@@ -151,10 +153,6 @@ async def chat(request, round_id):
     return response
 
 
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
-
-
 @login_required
 @require_POST
 def transcribe(request):
@@ -179,6 +177,9 @@ def interrupt_chat(request, round_id):
         raise Http404
 
     partial_content = request.POST.get("partial_content", "")
+
+    if ConversationMessage.objects.filter(round=round_obj, role="assistant", was_interrupted=True).exists():
+        return JsonResponse({"ok": True})
 
     providers = configured_providers()
     model_name = ""

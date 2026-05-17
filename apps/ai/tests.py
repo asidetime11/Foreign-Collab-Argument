@@ -375,6 +375,7 @@ class InterruptChatTests(TransactionTestCase):
         msg = ConversationMessage.objects.get(round=round_obj, role="assistant")
         self.assertEqual(msg.content, "")
         self.assertTrue(msg.was_interrupted)
+        self.assertIsNotNone(msg.interrupted_at)
 
     def test_interrupt_requires_login(self):
         _, round_obj = self._round("i003")
@@ -398,3 +399,23 @@ class InterruptChatTests(TransactionTestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+        self.assertFalse(ConversationMessage.objects.filter(round=round_obj).exists())
+
+    def test_interrupt_is_idempotent(self):
+        user, round_obj = self._round("i005")
+        self._provider()
+        self.client.force_login(user)
+
+        self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": "first"},
+        )
+        response = self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": "second"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ConversationMessage.objects.filter(round=round_obj, role="assistant").count(), 1)
+        msg = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(msg.content, "first")
