@@ -235,13 +235,22 @@
     const revealer = createTextRevealer(assistant);
     setStatus("正在整理回复...", true);
 
+    const controller = new AbortController();
+    let firstChunk = true;
+
+    function onAbortClick(e) {
+      e.preventDefault();
+      controller.abort();
+    }
+
     const data = new FormData();
     data.append("message", text);
     try {
       const response = await fetch("/ai/chat/" + panel.dataset.roundId + "/", {
         method: "POST",
         headers: { "X-CSRFToken": csrfToken() },
-        body: data
+        body: data,
+        signal: controller.signal,
       });
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -253,18 +262,45 @@
         const blocks = buffer.split("\n\n");
         buffer = blocks.pop() || "";
         blocks.forEach((block) => handleServerEvent(block, revealer, assistant));
+        if (firstChunk) {
+          firstChunk = false;
+          if (send) {
+            send.textContent = "中断";
+            send.disabled = false;
+            send.addEventListener("click", onAbortClick);
+          }
+        }
         setStatus("AI 正在回复...", true);
       }
       if (buffer) handleServerEvent(buffer, revealer, assistant);
       await revealer.finish();
     } catch (error) {
-      assistant.classList.add("error");
-      revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
-      await revealer.finish();
+      if (error.name === "AbortError") {
+        const partial = assistant.dataset.markdownSource || assistant.textContent || "";
+        const tag = document.createElement("span");
+        tag.className = "chat-interrupted-tag";
+        tag.textContent = " 「已中断」";
+        assistant.appendChild(tag);
+        const interruptData = new FormData();
+        interruptData.append("partial_content", partial);
+        fetch("/ai/interrupt/" + panel.dataset.roundId + "/", {
+          method: "POST",
+          headers: { "X-CSRFToken": csrfToken() },
+          body: interruptData,
+        }).catch(function () {});
+      } else {
+        assistant.classList.add("error");
+        revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
+        await revealer.finish();
+      }
     } finally {
       setStatus("", false);
+      if (send) {
+        send.textContent = "发送";
+        send.disabled = false;
+        send.removeEventListener("click", onAbortClick);
+      }
       input.disabled = false;
-      if (send) send.disabled = false;
       input.focus();
     }
   });
