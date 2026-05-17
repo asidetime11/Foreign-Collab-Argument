@@ -30,8 +30,8 @@ Registered in `apps/ai/urls.py`.
 
 **Logic (`apps/ai/views.py`):**
 1. Authenticate user, look up `TopicRound` by `round_id` owned by that user.
-2. Find the most recent `ConversationMessage` for that round with `role="assistant"` and `was_interrupted=False` and no content yet (created in the same request cycle), or create a new one.
-3. Write `partial_content` → `content`, set `was_interrupted=True`, `interrupted_at=now()`.
+2. Always create a new `ConversationMessage` (the streaming endpoint only writes the assistant record after the full stream completes, so no in-progress record exists at interrupt time).
+3. Write `partial_content` → `content`, `role="assistant"`, `was_interrupted=True`, `interrupted_at=now()`, plus `language`, `ai_mode_name`, `model_name` copied from round context.
 4. Return `JsonResponse({"ok": True})`.
 
 ## Frontend (`static/survey/js/chat.js`)
@@ -64,7 +64,14 @@ In `user_detail.html` AI conversation table, "模型 / 状态" column:
 {% endif %}
 ```
 
-The `pill-warn` class follows the existing `pill` style with a warning colour (amber/orange), consistent with the error message display pattern already in that column.
+The `pill-warn` class does not exist yet and must be added as inline CSS in `user_detail.html`:
+
+```css
+.pill-warn {
+  background: #fff8e1;
+  color: #b45309;
+}
+```
 
 ## Scope
 
