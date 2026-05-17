@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse, StreamingHttpResponse
 from django.shortcuts import redirect
+from django.utils import timezone
 
 from apps.survey.models import ConversationMessage, TopicRound
 
@@ -165,3 +166,37 @@ def transcribe(request):
     except ImproperlyConfigured as exc:
         return JsonResponse({"error": _friendly_chat_error(exc)}, status=503)
     return JsonResponse({"text": text, "model": settings.DEFAULT_TRANSCRIBE_MODEL})
+
+
+@login_required
+@require_POST
+def interrupt_chat(request, round_id):
+    try:
+        round_obj = TopicRound.objects.select_related(
+            "session", "ai_mode"
+        ).get(pk=round_id, session__user=request.user)
+    except TopicRound.DoesNotExist:
+        raise Http404
+
+    partial_content = request.POST.get("partial_content", "")
+
+    providers = configured_providers()
+    model_name = ""
+    if providers:
+        key = providers[0].api_keys.filter(is_active=True).order_by("usage_count", "id").first()
+        if key:
+            model_name = key.default_model_name()
+        else:
+            model_name = providers[0].model_name
+
+    ConversationMessage.objects.create(
+        round=round_obj,
+        role="assistant",
+        content=partial_content,
+        language=round_obj.session.language,
+        ai_mode_name=round_obj.ai_mode.name_zh if round_obj.ai_mode else "",
+        model_name=model_name,
+        was_interrupted=True,
+        interrupted_at=timezone.now(),
+    )
+    return JsonResponse({"ok": True})

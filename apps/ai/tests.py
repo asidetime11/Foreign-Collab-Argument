@@ -315,3 +315,86 @@ class AIViewTests(TransactionTestCase):
         self.assertEqual(response.json()["text"], "这是转写文字")
         self.assertEqual(response.json()["model"], "gpt-4o-mini-transcribe")
         transcribe.assert_called_once()
+
+
+class InterruptChatTests(TransactionTestCase):
+    def _round(self, username="interrupter"):
+        user = User.objects.create_user(username, password="pass")
+        batch = ExperimentBatch.objects.create(name=f"Batch {username}")
+        mode = AIMode.objects.create(batch=batch, name_zh="总结", prompt_zh="请总结信息。")
+        session = SurveySession.objects.create(user=user, batch=batch, language="zh-hans", topic_order_snapshot=[])
+        round_obj = TopicRound.objects.create(
+            session=session,
+            round_type=TopicRound.HIGH,
+            topic_id=1,
+            current_step="chat",
+            ai_mode=mode,
+        )
+        return user, round_obj
+
+    def _provider(self, name="provider", model="model-a", key="key-a"):
+        provider = LLMProvider.objects.create(
+            name=name,
+            model_name=model,
+            base_url=f"https://{name}.example/v1",
+            priority=1,
+        )
+        APIKey.objects.create(provider=provider, api_key=key, model_name="", is_active=True)
+        return provider
+
+    def test_interrupt_creates_message_with_partial_content(self):
+        user, round_obj = self._round("i001")
+        self._provider()
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": "这是被截断的"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        msg = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(msg.content, "这是被截断的")
+        self.assertTrue(msg.was_interrupted)
+        self.assertIsNotNone(msg.interrupted_at)
+        self.assertEqual(msg.language, "zh-hans")
+        self.assertEqual(msg.ai_mode_name, "总结")
+
+    def test_interrupt_with_empty_content_is_allowed(self):
+        user, round_obj = self._round("i002")
+        self._provider()
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        msg = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(msg.content, "")
+        self.assertTrue(msg.was_interrupted)
+
+    def test_interrupt_requires_login(self):
+        _, round_obj = self._round("i003")
+
+        response = self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": "some text"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ConversationMessage.objects.filter(round=round_obj).exists())
+
+    def test_interrupt_returns_404_for_wrong_user(self):
+        _, round_obj = self._round("i004")
+        other_user = User.objects.create_user("other_i004", password="pass")
+        self.client.force_login(other_user)
+
+        response = self.client.post(
+            reverse("ai:interrupt", args=[round_obj.pk]),
+            {"partial_content": "text"},
+        )
+
+        self.assertEqual(response.status_code, 404)
