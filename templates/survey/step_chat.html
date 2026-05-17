@@ -6,7 +6,7 @@
   {% include "survey/partials/step_header.html" %}
   <div class="chat-head">
     <div>
-      <p class="step-label">{{ step_meta.label }}</p>
+      <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
       <h1>{{ step_meta.title }}</h1>
     </div>
     <div class="timer">剩余时间 <strong data-countdown>{{ minutes }}:00</strong></div>
@@ -20,12 +20,18 @@
     {% endfor %}
   </div>
   <p class="chat-status" data-chat-status hidden>正在整理回复...</p>
-  <form id="chat-form" class="chat-input-row">
-    {% csrf_token %}
-    <input name="message" autocomplete="off" data-no-paste="true" placeholder="直接输入你想聊的内容">
-    <button type="submit">发送</button>
-  </form>
-  <form method="post" class="chat-finish">{% csrf_token %}<button class="primary" type="submit">完成这轮对话</button></form>
+  <div class="chat-compose">
+    <form id="chat-form" class="chat-input-row">
+      {% csrf_token %}
+      <input name="message" autocomplete="off" data-no-paste="true" placeholder="直接输入你想聊的内容">
+      <button type="button" class="ghost voice-button" data-recorder data-recorder-target='input[name="message"]'>语音输入</button>
+      <button type="submit">发送</button>
+    </form>
+    <form method="post" class="chat-finish" data-confirm-finish>{% csrf_token %}<button class="finish-button" type="submit">完成这轮对话</button></form>
+  </div>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/chat.js' %}"></script>{% endblock %}
+{% block scripts %}
+<script src="{% static 'survey/js/recorder.js' %}"></script>
+<script src="{% static 'survey/js/chat.js' %}"></script>
+{% endblock %}

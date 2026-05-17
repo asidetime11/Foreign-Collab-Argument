@@ -81,6 +81,11 @@
     const container = slider.closest('.scale-question');
     if (!container) return;
 
+    const readout = container.querySelector('[data-scale-value]');
+    if (readout) {
+      readout.textContent = value;
+    }
+
     const numbers = container.querySelectorAll('.number-label');
     numbers.forEach(label => {
       const labelValue = parseInt(label.dataset?.value || '0');

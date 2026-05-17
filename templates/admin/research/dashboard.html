@@ -6,119 +6,81 @@
   .research-shell {
     display: grid;
     gap: 20px;
-    max-width: 1220px;
+    max-width: 1180px;
   }
 
   .research-hero {
-    border: 1px solid rgba(23, 71, 93, .18);
-    border-left: 6px solid #176a80;
-    border-radius: 8px;
+    border: 1px solid rgba(83, 100, 113, .16);
+    border-left: 6px solid #1da1f2;
+    border-radius: 12px;
     padding: 26px 28px;
-    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 64%, #e7fbff 100%);
-    box-shadow: 0 18px 38px rgba(23, 71, 93, .14);
+    background: linear-gradient(135deg, #fff 0%, #f3f8fc 100%);
+    box-shadow: 0 12px 30px rgba(15, 20, 25, .07);
   }
 
   .research-hero h1 {
     margin: 0 0 8px;
-    font-size: 28px;
-    color: #172033;
+    font-size: 30px;
+    color: #0f1419;
   }
 
   .research-hero p {
     margin: 0;
-    color: #516171;
+    color: #536471;
     line-height: 1.8;
-  }
-
-  .research-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .research-card,
-  .research-action {
-    border: 1px solid rgba(23, 71, 93, .14);
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 14px 30px rgba(23, 71, 93, .09);
-  }
-
-  .research-card {
-    display: grid;
-    gap: 10px;
-    padding: 18px;
-  }
-
-  .research-card span {
-    color: #657486;
-  }
-
-  .research-card strong {
-    font-size: 28px;
-    color: #172033;
   }
 
   .research-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
+  }
+
+  .research-section {
+    display: grid;
+    gap: 10px;
+  }
+
+  .research-section h2 {
+    margin: 0;
+    color: #536471;
+    font-size: 14px;
+    font-weight: 900;
   }
 
   .research-action {
     position: relative;
-    min-height: 96px;
-    padding: 20px 22px;
+    min-height: 124px;
+    border: 1px solid rgba(83, 100, 113, .14);
+    border-radius: 12px;
+    background: #fff;
+    padding: 22px 24px;
     text-decoration: none;
-    color: #172033;
+    color: #0f1419;
+    box-shadow: 0 8px 24px rgba(15, 20, 25, .06);
     transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
 
   .research-action:hover {
     transform: translateY(-2px);
-    border-color: rgba(23, 106, 128, .35);
-    box-shadow: 0 18px 34px rgba(23, 71, 93, .14);
+    border-color: rgba(29, 161, 242, .34);
+    box-shadow: 0 14px 30px rgba(15, 20, 25, .09);
   }
 
   .research-action b {
     display: block;
-    margin-bottom: 8px;
-    font-size: 18px;
+    margin-bottom: 10px;
+    color: #0a73b8;
+    font-size: 20px;
   }
 
   .research-action span {
-    color: #5d6d80;
+    color: #536471;
     line-height: 1.7;
   }
 
-  .research-action.export {
-    background: linear-gradient(125deg, #f7fff9, #dff7ee);
-    border-color: rgba(34, 150, 103, .26);
-  }
-
-  .research-section {
-    display: grid;
-    gap: 12px;
-  }
-
-  .research-section-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #172033;
-    margin: 0;
-    padding: 0 4px;
-  }
-
-  .research-subsection {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    padding-left: 12px;
-    border-left: 3px solid rgba(23, 106, 128, .15);
-  }
-
   @media (max-width: 900px) {
-    .research-grid, .research-actions, .research-subsection {
+    .research-actions {
       grid-template-columns: 1fr;
     }
   }
@@ -128,28 +90,23 @@
 <div class="research-shell">
   <section class="research-hero">
     <h1>研究管理台</h1>
-    <p>这里只保留需要修改的实验内容，以及按用户组织的数据查看和一键导出。</p>
+    <p>集中管理实验说明、话题材料、参与用户、模型 API 与 Prompt 设置。</p>
   </section>
 
-  <section class="research-grid" aria-label="数据概览">
-    <div class="research-card"><span>话题材料</span><strong>{{ topic_count }}</strong></div>
-    <div class="research-card"><span>AI 模式</span><strong>{{ ai_mode_count }}</strong></div>
-    <div class="research-card"><span>参与用户</span><strong>{{ user_count }}</strong></div>
-    <div class="research-card"><span>已完成</span><strong>{{ completed_count }}</strong></div>
+  <section class="research-section" aria-label="用户数据">
+    <h2>用户数据</h2>
+    <div class="research-actions">
+      <a class="research-action" href="{{ users_url }}"><b>用户数据</b><span>查看用户进度、英文论文倒计时、具体答题数据，并导出 CSV。</span></a>
+    </div>
   </section>
 
-  <section class="research-actions" aria-label="管理入口">
-    <a class="research-action" href="{{ copy_url }}"><b>第一步说明文字</b><span>修改参与者进入排序页时看到的小字说明。</span></a>
-    <a class="research-action" href="{{ topics_url }}"><b>话题材料</b><span>编辑每个话题、帖子正文和配套评论。</span></a>
-    <a class="research-action" href="{{ users_url }}"><b>用户数据</b><span>按用户查看排序、量表、文本和 AI 对话完成情况。</span></a>
-    <a class="research-action export" href="{{ export_url }}"><b>一键导出全部用户数据</b><span>下载包含所有用户完整记录的 Excel。</span></a>
-  </section>
-
-  <section class="research-section" aria-label="AI模式配置">
-    <h2 class="research-section-title">AI 模式配置</h2>
-    <div class="research-subsection">
-      <a class="research-action" href="{{ llm_providers_url }}"><b>模型与API配置</b><span>配置AI模型、API地址、密钥池和选择系统使用的模型。</span></a>
-      <a class="research-action" href="{{ ai_modes_url }}"><b>Prompt 配置</b><span>修改每个 AI 对话模式使用的提示词。</span></a>
+  <section class="research-section" aria-label="管理入口">
+    <h2>实验配置</h2>
+    <div class="research-actions">
+    <a class="research-action" href="{{ copy_url }}"><b>说明文字</b><span>编辑第一步说明，以及英文论文写作要求和时长。</span></a>
+    <a class="research-action" href="{{ topics_url }}"><b>话题</b><span>编辑每个话题、帖子正文和配套评论。</span></a>
+    <a class="research-action" href="{{ llm_providers_url }}"><b>模型和 API</b><span>配置 AI 模型、API 地址、密钥池和系统当前使用的模型。</span></a>
+    <a class="research-action" href="{{ ai_modes_url }}"><b>Prompt 设置</b><span>修改每个 AI 对话模式使用的提示词。</span></a>
     </div>
   </section>
 </div>

@@ -117,7 +117,7 @@ class ParticipantProfileTests(TestCase):
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
 
         self.assertIn(".account-switch", stylesheet)
-        self.assertIn("justify-content: center", stylesheet)
+        self.assertIn("justify-content: flex-start", stylesheet)
         self.assertIn("flex-wrap: nowrap", stylesheet)
 
     def test_authenticated_top_actions_use_account_menu(self):
@@ -130,7 +130,7 @@ class ParticipantProfileTests(TestCase):
         self.assertContains(response, 'class="account-link"')
         self.assertContains(response, 'class="account-logout"')
 
-    def test_participant_can_register_and_get_default_batch(self):
+    def test_participant_can_register_then_login_manually(self):
         batch = ExperimentBatch.objects.create(name="批次 A", is_active=True)
 
         response = self.client.post(
@@ -143,6 +143,28 @@ class ParticipantProfileTests(TestCase):
         )
 
         user = User.objects.get(username="new_participant")
-        self.assertRedirects(response, reverse("accounts:profile_prompt"))
+        self.assertRedirects(response, reverse("login"), fetch_redirect_response=False)
         self.assertEqual(user.participant_profile.batch, batch)
-        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+        login_response = self.client.post(reverse("login"), {"username": "new_participant", "password": "StrongPass12345"})
+        self.assertRedirects(login_response, reverse("survey:start"), fetch_redirect_response=False)
+
+    def test_profile_page_explains_only_display_name_is_required(self):
+        user = User.objects.create_user("p_profile", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("accounts:profile_edit"))
+
+        self.assertContains(response, "只有称呼/姓名是必填项")
+        self.assertContains(response, "返回")
+        self.assertContains(response, "<select", count=5)
+        self.assertContains(response, "profile-card")
+
+    def test_first_name_page_redirects_to_full_profile_page(self):
+        user = User.objects.create_user("p_first_name", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("accounts:profile_prompt"))
+
+        self.assertRedirects(response, reverse("accounts:profile_edit"))

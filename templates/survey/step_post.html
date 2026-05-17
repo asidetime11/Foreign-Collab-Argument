@@ -5,16 +5,18 @@
 <section class="task-page task-page-post">
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
-    <p class="step-label">{{ step_meta.label }}</p>
-    <h1>{{ step_meta.title }}</h1>
-    <p class="intro-text">读完帖子和留言后，可以给每条留言点一个正大拇指或倒大拇指。</p>
+    <div class="task-hero-main">
+      <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
+      <h1>{{ step_meta.title }}</h1>
+      <p class="intro-text">读完帖子和留言后，可以给帖子和留言点赞或点踩~</p>
+    </div>
   </div>
   <!-- Post Card -->
   <div class="post-card">
     <div class="post-header">
-      <img src="{% static 'survey/img/avatar-1.png' %}" alt="" class="avatar avatar-large">
+      <img src="{% static 'survey/img/' %}{{ material.avatar_file }}" alt="" class="avatar avatar-large">
       <div class="post-meta">
-        <span class="username">{{ material.author_name|default:"Anonymous" }}</span>
+        <span class="username">{{ material.author }}</span>
         <span class="timestamp">· 2小时前</span>
       </div>
     </div>
@@ -25,21 +27,33 @@
     </div>
 
     <div class="post-actions">
-      <span class="comment-count">💬 {{ material.comments|length }}</span>
-      <button type="button" class="reaction-btn" data-reaction="like">
-        <span class="reaction-icon">👍</span>
-        <span class="reaction-label">Like</span>
-      </button>
-      <button type="button" class="reaction-btn" data-reaction="dislike">
-        <span class="reaction-icon">👎</span>
-        <span class="reaction-label">Dislike</span>
-      </button>
+      <div class="reaction-group post-reaction-group">
+        <input type="hidden" name="post_reaction" value="none">
+        <button
+          class="reaction-button"
+          data-reaction="like"
+          type="button"
+          aria-label="赞这个帖子"
+          aria-pressed="false"
+        >
+          <img class="reaction-icon" src="{% static 'survey/img/like.png' %}" alt="">
+        </button>
+        <button
+          class="reaction-button"
+          data-reaction="dislike"
+          type="button"
+          aria-label="踩这个帖子"
+          aria-pressed="false"
+        >
+          <img class="reaction-icon" src="{% static 'survey/img/dislike.png' %}" alt="">
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Comments Section -->
   <div class="comments-section">
-    <h3 class="comments-header">💬 评论 ({{ material.comments|length }})</h3>
+    <h3 class="comments-header">评论 ({{ material.comments|length }})</h3>
 
     <form method="post" class="task-form">
       {% csrf_token %}
@@ -56,7 +70,6 @@
           </div>
           <div class="comment-body">{{ comment.body }}</div>
           <div class="comment-actions">
-            <span class="like-count">👍 {{ comment.like_count|default:0 }}</span>
             <div class="reaction-group">
               <input type="hidden" name="comment_{{ comment.id }}" value="none">
               <button

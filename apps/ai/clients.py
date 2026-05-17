@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -7,38 +6,58 @@ from django.utils import timezone
 from openai import OpenAI
 
 
+AI_CONFIGURATION_ERROR = "请先在后台的“模型和 API”页面配置 URL、API Key 和模型。"
+
+
+def configured_providers():
+    from apps.experiments.models import LLMProvider
+
+    return list(
+        LLMProvider.objects.filter(is_active=True, api_keys__is_active=True)
+        .distinct()
+        .order_by("priority", "id")
+    )
+
+
 def ensure_ai_configured():
-    if not settings.DUBRIFY_API_KEY:
-        raise ImproperlyConfigured("DUBRIFY_API_KEY is not configured. Please set it in .env before using AI chat or transcription.")
+    if not configured_providers():
+        raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+
+
+def _default_provider():
+    providers = configured_providers()
+    if not providers:
+        raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+    return providers[0]
 
 
 def _client():
-    ensure_ai_configured()
-    return OpenAI(api_key=settings.DUBRIFY_API_KEY, base_url=settings.DUBRIFY_BASE_URL)
+    client, _model_name = _get_client_for_provider(_default_provider())
+    return client
 
 
-def _get_client_for_provider(provider):
-    """根据LLMProvider配置创建OpenAI客户端，使用轮询分配的API key"""
+def _get_client_for_provider(provider=None):
     if not provider:
-        # 如果没有指定provider，使用默认配置
-        return _client(), settings.DEFAULT_CHAT_MODEL
+        provider = _default_provider()
 
     if not provider.is_active:
-        raise ValueError(f"LLM提供商 {provider.name} 未启用")
+        raise ValueError(f"LLM provider {provider.name} is disabled.")
 
-    # 从key池中获取下一个可用的key（轮询分配）
     try:
-        api_key = provider.get_next_api_key()
-    except ValueError as e:
-        raise ImproperlyConfigured(f"无法获取API Key: {e}")
+        api_key_config = provider.get_next_api_key()
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"无法获取 API Key: {exc}") from exc
 
-    # 更新最后使用时间
-    from apps.experiments.models import APIKey
-    APIKey.objects.filter(provider=provider, api_key=api_key).update(last_used_at=timezone.now())
+    api_key_config.last_used_at = timezone.now()
+    api_key_config.save(update_fields=["last_used_at"])
 
-    # 创建客户端
-    client = OpenAI(api_key=api_key, base_url=provider.base_url)
-    return client, provider.model_name
+    model_name = api_key_config.default_model_name()
+    if not model_name:
+        raise ImproperlyConfigured("请在后台为 API Key 填写至少一个模型。")
+
+    client = OpenAI(api_key=api_key_config.api_key, base_url=provider.base_url)
+    provider._last_model_name = model_name
+    return client, model_name
 
 
 def _is_retryable_busy_error(exc):
@@ -47,23 +66,10 @@ def _is_retryable_busy_error(exc):
 
 
 def chat_stream(messages, model=None, provider=None):
-    """
-    流式聊天
-
-    Args:
-        messages: 消息列表
-        model: 模型名称（可选，如果指定provider则使用provider的model_name）
-        provider: LLMProvider实例（可选，优先使用此配置）
-    """
     attempts = 2
-
-    if provider:
-        # 使用provider配置
-        client, model_name = _get_client_for_provider(provider)
-    else:
-        # 使用默认配置
-        client = _client()
-        model_name = model or settings.DEFAULT_CHAT_MODEL
+    client, model_name = _get_client_for_provider(provider or _default_provider())
+    if model and not provider:
+        model_name = model
 
     for attempt in range(attempts):
         try:
@@ -87,9 +93,9 @@ def chat_stream(messages, model=None, provider=None):
 
 
 def transcribe_audio(file_obj, model=None):
-    transcript = _client().audio.transcriptions.create(
+    client, _model_name = _get_client_for_provider(_default_provider())
+    transcript = client.audio.transcriptions.create(
         model=model or settings.DEFAULT_TRANSCRIBE_MODEL,
         file=file_obj,
     )
     return getattr(transcript, "text", "")
-

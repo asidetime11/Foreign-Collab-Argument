@@ -19,8 +19,8 @@
     {{ form.ordered_topic_ids }}
     <ol id="topic-list" class="topic-list" aria-label="话题排序">
       {% for topic in topics %}
-        <li class="topic-card" draggable="true" data-topic-id="{{ topic.id }}">
-          <div class="drag-handle" aria-label="Drag to reorder">
+        <li class="topic-card" data-topic-id="{{ topic.id }}">
+          <div class="drag-handle" data-drag-handle aria-label="拖动调整顺序">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <circle cx="5" cy="4" r="1.5"/>
               <circle cx="11" cy="4" r="1.5"/>
@@ -30,7 +30,6 @@
               <circle cx="11" cy="12" r="1.5"/>
             </svg>
           </div>
-          <div class="topic-number">{{ forloop.counter }}</div>
           <div class="topic-content">
             <h3>{{ topic.title }}</h3>
           </div>
@@ -48,4 +47,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260516-6"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260517-1"></script>{% endblock %}

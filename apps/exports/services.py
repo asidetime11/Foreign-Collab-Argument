@@ -6,7 +6,7 @@ from openpyxl import Workbook
 
 from apps.accounts.models import ParticipantProfile
 from apps.survey.comment_identity import comment_display_name
-from apps.survey.models import CommentReaction, ConversationMessage, QualityEvent, ScaleResponse, SurveySession, TextResponse, TopicRound
+from apps.survey.models import CommentReaction, ConversationMessage, EnglishPaperResponse, PostReaction, QualityEvent, ScaleResponse, SurveySession, TextResponse, TopicRound
 
 
 SECTIONS = {
@@ -15,6 +15,8 @@ SECTIONS = {
     "topic_order": "topic_order",
     "rounds": "rounds",
     "comment_reactions": "comment_reactions",
+    "post_reactions": "post_reactions",
+    "english_papers": "english_papers",
     "scale_responses": "scale_responses",
     "text_responses": "text_responses",
     "conversation": "conversation",
@@ -77,6 +79,31 @@ def comment_reaction_rows(batch):
     ]
 
 
+def post_reaction_rows(batch):
+    return [
+        {
+            "username": reaction.round.session.user.username,
+            "round_type": reaction.round.round_type,
+            "topic_id": reaction.round.topic_id,
+            "reaction": reaction.reaction,
+        }
+        for reaction in PostReaction.objects.filter(round__session__batch=batch).select_related("round__session__user")
+    ]
+
+
+def english_paper_rows(batch):
+    return [
+        {
+            "username": response.session.user.username,
+            "prompt": response.prompt,
+            "duration_hours": response.duration_hours,
+            "paper_text": response.paper_text,
+            "submitted_at": response.submitted_at.isoformat(),
+        }
+        for response in EnglishPaperResponse.objects.filter(session__batch=batch).select_related("session__user")
+    ]
+
+
 def scale_response_rows(batch):
     return [
         {
@@ -134,6 +161,8 @@ SECTION_BUILDERS = {
     "topic_order": topic_order_rows,
     "rounds": round_rows,
     "comment_reactions": comment_reaction_rows,
+    "post_reactions": post_reaction_rows,
+    "english_papers": english_paper_rows,
     "scale_responses": scale_response_rows,
     "text_responses": text_response_rows,
     "conversation": conversation_rows,
@@ -201,6 +230,79 @@ def _comment_reaction_label(reaction):
     return labels.get(reaction, reaction)
 
 
+def _post_reactions_text(rounds):
+    rows = PostReaction.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id")
+    return _joined_values(
+        f"{row.round.round_type}/topic-{row.round.topic_id}: {_comment_reaction_label(row.reaction)}"
+        for row in rows
+    )
+
+
+def _comment_reactions_text(rounds):
+    rows = CommentReaction.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id")
+    values = []
+    for row in rows:
+        comment, comment_index = _comment_by_snapshot_id(row.round, row.comment_snapshot_id)
+        values.append(
+            f"{row.round.round_type}/topic-{row.round.topic_id}/comment-{row.comment_snapshot_id}"
+            f" ({comment_display_name(comment_index)}): {_comment_reaction_label(row.reaction)}"
+        )
+    return _joined_values(values)
+
+
+def all_users_summary_rows():
+    rows = []
+    profiles = (
+        ParticipantProfile.objects.select_related("user", "batch")
+        .filter(user__is_staff=False, user__is_superuser=False)
+        .order_by("user__username")
+    )
+    for profile in profiles:
+        try:
+            session = profile.user.survey_session
+        except SurveySession.DoesNotExist:
+            session = None
+        rounds = list(session.rounds.all()) if session else []
+        topic_order = session.submitted_topic_order if session else []
+        rows.append(
+            {
+                "用户名": profile.user.username,
+                "称呼/姓名": profile.display_name,
+                "地区": profile.region,
+                "年龄段": profile.age_range,
+                "性别": profile.gender,
+                "学校/单位类型": profile.organization_type,
+                "教育/职业状态": profile.education_or_work,
+                "联系方式": profile.contact,
+                "观点排序": str(topic_order),
+                "感受": _scale_summary(rounds, "emotion"),
+                "观点": _joined_values([_scale_summary(rounds, "stance_before"), _scale_summary(rounds, "stance_after")]),
+                "AI评价": _scale_summary(rounds, "ai_eval"),
+                "初始想法": _text_for_step(rounds, "initial_text"),
+                "最终想法": _text_for_step(rounds, "final_text"),
+                "英文论文": getattr(session, "english_paper_response", None).paper_text if session and hasattr(session, "english_paper_response") else "",
+                "帖子互动": _post_reactions_text(rounds),
+                "评论互动": _comment_reactions_text(rounds),
+                "AI对话": _conversation_text(rounds),
+                "开始时间": session.started_at.isoformat() if session else "",
+                "完成时间": session.completed_at.isoformat() if session and session.completed_at else "",
+            }
+        )
+    return rows
+
+
+def build_all_users_csv():
+    rows = all_users_summary_rows()
+    headers = list(rows[0].keys()) if rows else ["用户名"]
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return output.getvalue().encode("utf-8")
+
+
 def build_all_users_excel():
     workbook = Workbook()
     summary_sheet = workbook.active
@@ -220,6 +322,7 @@ def build_all_users_excel():
         "AI评价",
         "初始想法",
         "最终想法",
+        "英文论文",
         "与AI对话",
         "开始时间",
         "完成时间",
@@ -229,10 +332,17 @@ def build_all_users_excel():
     conversation_sheet = workbook.create_sheet("AI对话")
     conversation_sheet.append(["用户名", "轮次", "角色", "内容", "AI模式", "模型", "创建时间"])
 
+    post_reaction_sheet = workbook.create_sheet("帖子互动")
+    post_reaction_sheet.append(["用户名", "轮次", "话题ID", "互动", "提交时间"])
+
     reaction_sheet = workbook.create_sheet("评论互动")
     reaction_sheet.append(["用户名", "轮次", "话题ID", "评论ID", "评论作者", "评论内容", "互动", "提交时间"])
 
-    profiles = ParticipantProfile.objects.select_related("user", "batch").order_by("user__username")
+    profiles = (
+        ParticipantProfile.objects.select_related("user", "batch")
+        .filter(user__is_staff=False, user__is_superuser=False)
+        .order_by("user__username")
+    )
     for profile in profiles:
         try:
             session = profile.user.survey_session
@@ -256,6 +366,7 @@ def build_all_users_excel():
                 _scale_summary(rounds, "ai_eval"),
                 _text_for_step(rounds, "initial_text"),
                 _text_for_step(rounds, "final_text"),
+                getattr(session, "english_paper_response", None).paper_text if session and hasattr(session, "english_paper_response") else "",
                 _conversation_text(rounds),
                 session.started_at.isoformat() if session else "",
                 session.completed_at.isoformat() if session and session.completed_at else "",
@@ -271,6 +382,16 @@ def build_all_users_excel():
                     message.ai_mode_name,
                     message.model_name,
                     message.created_at.isoformat(),
+                ]
+            )
+        for post_reaction in PostReaction.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id"):
+            post_reaction_sheet.append(
+                [
+                    profile.user.username,
+                    post_reaction.round.round_type,
+                    post_reaction.round.topic_id,
+                    _comment_reaction_label(post_reaction.reaction),
+                    post_reaction.submitted_at.isoformat(),
                 ]
             )
         for reaction in CommentReaction.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id"):

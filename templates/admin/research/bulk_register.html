@@ -11,16 +11,20 @@
 
   .bulk-hero,
   .bulk-card {
-    border: 1px solid rgba(23, 71, 93, .16);
-    border-radius: 8px;
+    border: 1px solid rgba(83, 100, 113, .16);
+    border-radius: 12px;
     background: #fff;
-    box-shadow: 0 16px 34px rgba(23, 71, 93, .10);
+    box-shadow: 0 8px 24px rgba(15, 20, 25, .06);
   }
 
   .bulk-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: center;
     padding: 24px 26px;
-    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 70%, #e7fbff 100%);
-    border-left: 6px solid #176a80;
+    background: linear-gradient(135deg, #fff 0%, #f3f8fc 100%);
+    border-left: 6px solid #1da1f2;
   }
 
   .bulk-hero h1 {
@@ -30,7 +34,7 @@
 
   .bulk-hero p {
     margin: 0;
-    color: #516171;
+    color: #536471;
     line-height: 1.8;
   }
 
@@ -46,7 +50,7 @@
   }
 
   .bulk-field label {
-    color: #172033;
+    color: #0f1419;
     font-weight: 700;
   }
 
@@ -55,10 +59,10 @@
     box-sizing: border-box;
     width: 100%;
     padding: 12px 14px;
-    border: 1px solid #c9d7e4;
+    border: 1px solid #d8e2ea;
     border-radius: 8px;
-    background: #fbfdff;
-    color: #172033;
+    background: #fff;
+    color: #0f1419;
     font-size: 15px;
   }
 
@@ -70,7 +74,7 @@
 
   .bulk-help {
     margin: 0;
-    color: #647487;
+    color: #536471;
     line-height: 1.7;
   }
 
@@ -80,15 +84,15 @@
     gap: 10px;
     align-items: end;
     padding: 14px;
-    border: 1px solid #d8e6ed;
+    border: 1px solid #e8eaed;
     border-radius: 8px;
-    background: #f7fbfc;
+    background: #f7f9fc;
   }
 
   .bulk-generator label {
     display: grid;
     gap: 7px;
-    color: #172033;
+    color: #0f1419;
     font-weight: 700;
   }
 
@@ -96,30 +100,30 @@
     box-sizing: border-box;
     width: 100%;
     padding: 10px 12px;
-    border: 1px solid #c9d7e4;
+    border: 1px solid #d8e2ea;
     border-radius: 8px;
     background: #fff;
-    color: #172033;
+    color: #0f1419;
   }
 
   .bulk-secondary {
     border: 1px solid #b9ced8;
     border-radius: 8px;
     background: #fff;
-    color: #176a80;
+    color: #0a73b8;
     font-weight: 700;
     padding: 10px 14px;
     cursor: pointer;
   }
 
   .bulk-secondary:hover {
-    border-color: #176a80;
-    background: #eef8fa;
+    border-color: #1da1f2;
+    background: #f3f8fc;
   }
 
   .bulk-generator-note {
     margin: 0;
-    color: #647487;
+    color: #536471;
     line-height: 1.6;
   }
 
@@ -144,15 +148,20 @@
   }
 
   .bulk-create {
-    background: #229667;
-    box-shadow: 0 8px 18px rgba(34, 150, 103, .18);
+    background: #00ba7c;
+    box-shadow: 0 8px 18px rgba(0, 186, 124, .18);
   }
 
   .bulk-create:hover {
-    background: #18784f;
+    background: #087a55;
   }
 
   @media (max-width: 780px) {
+    .bulk-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
     .bulk-generator {
       grid-template-columns: 1fr;
     }
@@ -162,8 +171,11 @@
 {% block content %}
 <div class="bulk-shell">
   <section class="bulk-hero">
-    <h1>批量注册新用户</h1>
-    <p>输入或随机生成用户名后，可以先导出账号 Excel 留档，再确认创建账号。</p>
+    <div>
+      <h1>批量注册新用户</h1>
+      <p>输入或随机生成用户名后，可以先导出账号 Excel 留档，再确认创建账号。</p>
+    </div>
+    <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
   </section>
 
   <form method="post" class="bulk-card">
@@ -195,6 +207,7 @@
       <button type="submit" class="default" name="action" value="export">导出账号 Excel</button>
       <button type="submit" class="default bulk-create" name="action" value="create">确认创建账号</button>
       <a class="button" href="{% url 'research_admin_users' %}">返回用户数据</a>
+      <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
     </div>
   </form>
 </div>

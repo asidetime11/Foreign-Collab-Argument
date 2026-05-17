@@ -14,8 +14,6 @@ SESSION_DONE = "done"
 
 def get_or_create_session(user, language="zh-hans"):
     profile = user.participant_profile
-    if not profile.has_required_display_name:
-        raise ValueError("missing_display_name")
     if not profile.batch:
         raise ValueError("missing_batch")
     session, created = SurveySession.objects.get_or_create(
@@ -43,6 +41,8 @@ def _batch_snapshot(batch: ExperimentBatch):
         "outro_en": batch.outro_en,
         "ai_chat_minutes": batch.ai_chat_minutes,
         "ai_neutrality": batch.ai_neutrality,
+        "english_paper_prompt": batch.english_paper_prompt,
+        "english_paper_duration_hours": batch.english_paper_duration_hours,
     }
 
 
@@ -96,6 +96,8 @@ def current_round(session: SurveySession):
 def current_step(session: SurveySession):
     if session.current_session_step == SurveySession.STEP_DONE:
         return SESSION_DONE
+    if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER:
+        return SurveySession.STEP_ENGLISH_PAPER
     if session.current_session_step == STEP_TOPIC_ORDER:
         return STEP_TOPIC_ORDER
     round_obj = current_round(session)
@@ -106,6 +108,10 @@ def start_current_step(session: SurveySession):
     now = timezone.now().isoformat()
     if session.current_session_step == STEP_TOPIC_ORDER:
         session.step_started_at.setdefault(STEP_TOPIC_ORDER, now)
+        session.save(update_fields=["step_started_at"])
+        return
+    if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER:
+        session.step_started_at.setdefault(SurveySession.STEP_ENGLISH_PAPER, now)
         session.save(update_fields=["step_started_at"])
         return
     round_obj = current_round(session)
@@ -145,11 +151,16 @@ def _complete_round(round_obj: TopicRound):
     session = round_obj.session
     next_index = session.current_round_index + 1
     if next_index >= session.rounds.count():
-        session.current_session_step = SurveySession.STEP_DONE
-        session.completed_at = timezone.now()
+        session.current_session_step = SurveySession.STEP_ENGLISH_PAPER
     else:
         session.current_round_index = next_index
     session.save()
+
+
+def complete_english_paper(session: SurveySession):
+    session.current_session_step = SurveySession.STEP_DONE
+    session.completed_at = timezone.now()
+    session.save(update_fields=["current_session_step", "completed_at"])
 
 
 def scale_items_for_step(batch, step):

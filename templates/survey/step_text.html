@@ -5,7 +5,7 @@
 <section class="task-page task-page-text">
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
-    <p class="step-label">{{ step_meta.label }}</p>
+    <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
     <h1>{{ step_meta.title }}</h1>
     {% if step == "final_text" %}
       <p class="intro-text">请再次写下你现在的想法，可以和之前相同，也可以不同。</p>
@@ -21,7 +21,7 @@
     {{ form.input_method }}
     {{ form.transcribe_model }}
     <div class="text-actions">
-      <button type="button" data-recorder>语音输入</button>
+      <button type="button" class="ghost voice-button" data-recorder data-recorder-target='textarea[name="final_text"]'>语音输入</button>
       <button class="primary" type="submit">保存想法</button>
     </div>
   </form>

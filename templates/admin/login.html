@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+
+{% block bodyclass %}{{ block.super }} admin-login-page{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div class="admin-login-wrap">
+  <section class="admin-login-card">
+    <div class="admin-login-brand">
+      <h1>协同论证后台</h1>
+      <p>登录工作人员账号，管理实验内容与数据。</p>
+    </div>
+
+    {% if form.errors %}
+      <div class="admin-login-message" role="alert">
+        {% if form.non_field_errors %}
+          {{ form.non_field_errors }}
+        {% else %}
+          <p>请输入正确的工作人员账号和密码。</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if user.is_authenticated %}
+      <div class="admin-login-message" role="alert">
+        <p>当前账号没有访问后台的权限。请换用工作人员账号登录。</p>
+      </div>
+    {% endif %}
+
+    <form action="{{ app_path }}" method="post" id="login-form" class="admin-login-form">
+      {% csrf_token %}
+      <div class="admin-login-field">
+        {{ form.username.label_tag }}
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+      <div class="admin-login-field">
+        {{ form.password.label_tag }}
+        {{ form.password }}
+        {{ form.password.errors }}
+      </div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="admin-login-actions">
+        <input type="submit" value="登录">
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

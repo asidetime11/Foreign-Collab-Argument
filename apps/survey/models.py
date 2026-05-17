@@ -5,6 +5,7 @@ from django.db import models
 class SurveySession(models.Model):
     STEP_TOPIC_ORDER = "topic_order"
     STEP_ROUND = "round"
+    STEP_ENGLISH_PAPER = "english_paper"
     STEP_DONE = "done"
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="survey_session")
@@ -65,6 +66,14 @@ class CommentReaction(models.Model):
     submitted_at = models.DateTimeField("提交时间", auto_now_add=True)
 
 
+class PostReaction(models.Model):
+    REACTIONS = CommentReaction.REACTIONS
+
+    round = models.OneToOneField(TopicRound, on_delete=models.CASCADE, related_name="post_reaction")
+    reaction = models.CharField("反应", max_length=20, choices=REACTIONS, default="none")
+    submitted_at = models.DateTimeField("提交时间", auto_now_add=True)
+
+
 class ScaleResponse(models.Model):
     round = models.ForeignKey(TopicRound, on_delete=models.CASCADE, related_name="scale_responses")
     step = models.CharField("步骤", max_length=40)
@@ -88,6 +97,22 @@ class TextResponse(models.Model):
     word_count = models.PositiveIntegerField("字数", default=0)
     elapsed_seconds = models.PositiveIntegerField("用时秒数", default=0)
     submitted_at = models.DateTimeField("提交时间", auto_now_add=True)
+
+
+class EnglishPaperResponse(models.Model):
+    session = models.OneToOneField(SurveySession, on_delete=models.CASCADE, related_name="english_paper_response")
+    prompt = models.TextField("论文要求")
+    duration_hours = models.PositiveIntegerField("时长（小时）", default=24)
+    paper_text = models.TextField("英文论文")
+    submitted_at = models.DateTimeField("提交时间", auto_now_add=True)
+
+
+class EnglishPaperDraft(models.Model):
+    session = models.OneToOneField(SurveySession, on_delete=models.CASCADE, related_name="english_paper_draft")
+    prompt = models.TextField("论文要求", blank=True)
+    duration_hours = models.PositiveIntegerField("时长（小时）", default=24)
+    paper_text = models.TextField("英文论文草稿", blank=True)
+    saved_at = models.DateTimeField("暂存时间", auto_now=True)
 
 
 class ConversationMessage(models.Model):

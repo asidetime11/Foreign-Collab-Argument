@@ -1,12 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="panel account-panel">
-  <p class="step-label">账号资料</p>
-  <h1>我的资料</h1>
-  <form method="post" class="grid-form">
-    {% csrf_token %}
-    {% include "accounts/partials/form_fields.html" %}
-    <button class="primary" type="submit">保存</button>
-  </form>
+<section class="profile-page">
+  <div class="panel account-panel profile-card">
+    <div class="profile-head">
+      <div>
+        <p class="step-label">账号资料</p>
+        <h1>我的资料</h1>
+      </div>
+      <a class="button secondary profile-back" href="{% url 'survey:start' %}">返回</a>
+    </div>
+    <p class="profile-note">只有称呼/姓名是必填项，其余资料都可以按你的意愿填写或跳过。</p>
+    <form method="post" class="grid-form profile-form">
+      {% csrf_token %}
+      {% include "accounts/partials/form_fields.html" %}
+      <div class="profile-actions">
+        <a class="button secondary" href="{% url 'survey:start' %}">返回</a>
+        <button class="primary" type="submit">保存资料</button>
+      </div>
+    </form>
+  </div>
 </section>
 {% endblock %}

@@ -3,38 +3,44 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
-  .copy-shell {
-    max-width: 940px;
+  .admin-module-shell {
     display: grid;
     gap: 18px;
+    max-width: 980px;
   }
 
-  .copy-hero,
-  .copy-card {
-    border: 1px solid rgba(23, 71, 93, .16);
-    border-radius: 8px;
+  .admin-module-hero,
+  .admin-module-card {
+    border: 1px solid rgba(83, 100, 113, .16);
+    border-radius: 12px;
     background: #fff;
-    box-shadow: 0 16px 34px rgba(23, 71, 93, .10);
+    box-shadow: 0 8px 24px rgba(15, 20, 25, .06);
   }
 
-  .copy-hero {
+  .admin-module-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: center;
     padding: 24px 26px;
-    background: linear-gradient(125deg, #fff8d8 0%, #edfff5 70%, #e7fbff 100%);
-    border-left: 6px solid #176a80;
+    background: linear-gradient(135deg, #fff 0%, #f3f8fc 100%);
+    border-left: 6px solid #1da1f2;
   }
 
-  .copy-hero h1 {
+  .admin-module-hero h1 {
     margin: 0 0 8px;
-    font-size: 26px;
+    font-size: 28px;
   }
 
-  .copy-hero p {
+  .admin-module-hero p {
     margin: 0;
-    color: #516171;
+    color: #536471;
     line-height: 1.8;
   }
 
-  .copy-card {
+  .admin-module-card {
+    display: grid;
+    gap: 18px;
     padding: 24px 26px;
   }
 
@@ -44,13 +50,14 @@
   }
 
   .copy-label {
-    color: #172033;
-    font-weight: 700;
+    color: #0f1419;
+    font-size: 16px;
+    font-weight: 800;
   }
 
   .copy-help {
     margin: 0;
-    color: #647487;
+    color: #536471;
     line-height: 1.7;
   }
 
@@ -59,10 +66,10 @@
     min-height: 180px;
     box-sizing: border-box;
     padding: 14px 16px;
-    border: 1px solid #c9d7e4;
+    border: 1px solid #d8e2ea;
     border-radius: 8px;
-    background: #fbfdff;
-    color: #172033;
+    background: #fff;
+    color: #0f1419;
     font-size: 15px;
     line-height: 1.7;
     resize: vertical;
@@ -72,32 +79,48 @@
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    margin-top: 18px;
+    margin-top: 4px;
   }
 
-  .copy-actions button,
-  .copy-actions .button {
-    padding: 10px 16px;
+  @media (max-width: 760px) {
+    .admin-module-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
   }
 </style>
 {% endblock %}
 {% block content %}
-<div class="copy-shell">
-  <section class="copy-hero">
-    <h1>编辑第一步说明</h1>
-    <p>这段文字会显示在参与者进行话题排序前，用来交代排序任务和提交后的不可返回规则。</p>
-  </section>
-  <form method="post" class="copy-card">
-    {% csrf_token %}
-    <div class="copy-field">
-      <label class="copy-label" for="{{ form.intro_zh.id_for_label }}">{{ form.intro_zh.label }}</label>
-      <p class="copy-help">建议保持简短明确，只保留参与者完成排序所需的信息。</p>
-      {{ form.intro_zh }}
-      {{ form.intro_zh.errors }}
+<div class="admin-module-shell">
+  <section class="admin-module-hero">
+    <div>
+      <h1>说明文字</h1>
+      <p>分别维护参与者进入排序页前看到的说明，以及英文论文写作页的任务要求。</p>
     </div>
+    <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
+  </section>
+
+  <form method="post" class="admin-module-card">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="copy-field">
+      <label class="copy-label" for="{{ field.id_for_label }}">
+        {% if field.name == "intro_zh" %}第一步说明{% else %}{{ field.label }}{% endif %}
+      </label>
+      {% if field.name == "intro_zh" %}
+        <p class="copy-help">这段文字会显示在参与者进行话题排序前。</p>
+      {% elif field.name == "english_paper_prompt" %}
+        <p class="copy-help">这段文字会显示在英文论文写作任务中。</p>
+      {% elif field.name == "english_paper_duration_hours" %}
+        <p class="copy-help">英文论文倒计时从参与者第一次进入写作页开始，默认 24 小时。</p>
+      {% endif %}
+      {{ field }}
+      {{ field.errors }}
+    </div>
+    {% endfor %}
     <div class="copy-actions">
       <button type="submit" class="default">保存说明文字</button>
-      <a class="button" href="{% url 'research_admin_dashboard' %}">返回管理台</a>
+      <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
     </div>
   </form>
 </div>

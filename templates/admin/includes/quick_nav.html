@@ -1,0 +1,8 @@
+<div class="admin-quick-nav" role="navigation" aria-label="后台快速导航">
+  <a href="{% url 'research_admin_dashboard' %}">后台主页面</a>
+  <a href="{% url 'research_admin_copy' %}">说明文字</a>
+  <a href="{% url 'admin:experiments_topic_changelist' %}">话题</a>
+  <a href="{% url 'research_admin_users' %}">用户数据</a>
+  <a href="{% url 'admin:experiments_llmprovider_changelist' %}">模型和 API</a>
+  <a href="{% url 'admin:experiments_aimode_changelist' %}">Prompt 设置</a>
+</div>

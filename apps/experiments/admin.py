@@ -1,6 +1,8 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db import models
+from django.shortcuts import redirect
+from django.urls import path, reverse
 
 from .admin_views import default_batch
 from .models import AIMode, APIKey, LLMProvider, SystemAPIConfig, Topic, TopicComment
@@ -115,7 +117,7 @@ class TopicCommentInline(admin.TabularInline):
 @admin.register(Topic)
 class TopicAdmin(admin.ModelAdmin):
     list_display = ("title_zh", "is_enabled", "position")
-    list_filter = ("is_enabled",)
+    actions = None
     search_fields = ("title_zh", "title_en")
     fieldsets = (
         ("话题", {"fields": ("title_zh", "title_en", "is_enabled", "position")}),
@@ -132,94 +134,279 @@ class TopicAdmin(admin.ModelAdmin):
 class APIKeyInline(admin.TabularInline):
     model = APIKey
     extra = 1
-    fields = ("name", "api_key", "usage_count", "is_active", "last_used_at")
-    readonly_fields = ("usage_count", "last_used_at")
+    fields = ("api_key", "model_name")
+    min_num = 1
+    validate_min = True
+    formfield_overrides = {
+        models.TextField: {
+            "widget": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "placeholder": "每行一个模型，例如：\ndeepseek-r1\ngpt-5-mini\nqwen-plus",
+                }
+            )
+        },
+    }
+
+
+class SimpleLLMProviderForm(forms.ModelForm):
+    class Meta:
+        model = LLMProvider
+        fields = ("base_url",)
+        labels = {
+            "base_url": "URL",
+        }
+        help_texts = {
+            "base_url": "",
+        }
+        widgets = {
+            "base_url": forms.URLInput(attrs={"placeholder": "https://api.example.com/v1"}),
+        }
+
+
+class CostEffectiveLLMProviderForm(forms.ModelForm):
+    API_FORMAT_CHOICES = [
+        ("", "--- 选择服务商/API格式 ---"),
+        ("openai", "OpenAI"),
+        ("deepseek", "DeepSeek（OpenAI 兼容）"),
+        ("qwen", "Qwen/通义千问（OpenAI 兼容）"),
+        ("anthropic", "Anthropic"),
+        ("custom", "自定义"),
+    ]
+    OAI_MODEL_CHOICES = [
+        ("", "--- 选择模型 ---"),
+        ("gpt-5.4-mini", "GPT-5.4 mini（推荐：质量/成本均衡）"),
+        ("gpt-5-mini", "GPT-5 mini（性价比通用）"),
+        ("gpt-5-nano", "GPT-5 nano（低成本快速）"),
+        ("custom", "自定义"),
+    ]
+    DEEPSEEK_MODEL_CHOICES = [
+        ("", "--- 选择模型 ---"),
+        ("deepseek-chat", "DeepSeek Chat（低成本通用）"),
+        ("deepseek-reasoner", "DeepSeek Reasoner（推理任务）"),
+        ("custom", "自定义"),
+    ]
+    QWEN_MODEL_CHOICES = [
+        ("", "--- 选择模型 ---"),
+        ("qwen-plus", "Qwen Plus（中文/通用性价比）"),
+        ("qwen-turbo", "Qwen Turbo（低成本快速）"),
+        ("qwen-max", "Qwen Max（质量优先）"),
+        ("custom", "自定义"),
+    ]
+    ANTHROPIC_MODEL_CHOICES = [
+        ("", "--- 选择模型 ---"),
+        ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5（质量优先）"),
+        ("custom", "自定义"),
+    ]
+    BASE_URL_PRESETS = {
+        "openai": "https://api.openai.com/v1",
+        "deepseek": "https://api.deepseek.com/v1",
+        "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "anthropic": "https://api.anthropic.com/v1",
+    }
+    MODEL_CHOICES_BY_FORMAT = {
+        "openai": OAI_MODEL_CHOICES,
+        "deepseek": DEEPSEEK_MODEL_CHOICES,
+        "qwen": QWEN_MODEL_CHOICES,
+        "anthropic": ANTHROPIC_MODEL_CHOICES,
+    }
+    MODEL_DISPLAY_NAMES = {
+        "gpt-5.4-mini": "OpenAI GPT-5.4 mini",
+        "gpt-5-mini": "OpenAI GPT-5 mini",
+        "gpt-5-nano": "OpenAI GPT-5 nano",
+        "deepseek-chat": "DeepSeek Chat",
+        "deepseek-reasoner": "DeepSeek Reasoner",
+        "qwen-plus": "Qwen Plus",
+        "qwen-turbo": "Qwen Turbo",
+        "qwen-max": "Qwen Max",
+        "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5",
+    }
+
+    api_format = forms.ChoiceField(
+        choices=API_FORMAT_CHOICES,
+        required=False,
+        label="服务商/API格式",
+        help_text="先选择服务商，系统会自动填入常用 Base URL。",
+    )
+    model_preset = forms.ChoiceField(
+        choices=OAI_MODEL_CHOICES,
+        required=False,
+        label="推荐模型",
+        help_text="可直接选择推荐模型，也可以选择“自定义”后手动填写模型名。",
+    )
+
+    class Meta:
+        model = LLMProvider
+        fields = "__all__"
+        widgets = {
+            "name": forms.TextInput(attrs={"placeholder": "例如：OpenAI GPT-5 mini", "size": "40"}),
+            "model_name": forms.TextInput(attrs={"placeholder": "例如：gpt-5-mini", "size": "40"}),
+            "base_url": forms.URLInput(attrs={"placeholder": "https://api.openai.com/v1", "size": "60"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        api_format = self._initial_api_format()
+        self.initial["api_format"] = api_format
+        self.fields["model_preset"].choices = self.MODEL_CHOICES_BY_FORMAT.get(api_format, self.OAI_MODEL_CHOICES)
+        if self.instance.pk:
+            all_models = dict(
+                self.OAI_MODEL_CHOICES
+                + self.DEEPSEEK_MODEL_CHOICES
+                + self.QWEN_MODEL_CHOICES
+                + self.ANTHROPIC_MODEL_CHOICES
+            )
+            self.initial["model_preset"] = self.instance.model_name if self.instance.model_name in all_models else "custom"
+
+    def _initial_api_format(self):
+        if not self.instance.pk:
+            return "openai"
+        base_url = self.instance.base_url or ""
+        if "deepseek" in base_url:
+            return "deepseek"
+        if "dashscope" in base_url or "qwen" in base_url:
+            return "qwen"
+        if "anthropic" in base_url:
+            return "anthropic"
+        if "openai" in base_url:
+            return "openai"
+        return "custom"
+
+    class Media:
+        js = ("admin/js/llm_provider_form.js",)
 
 
 @admin.register(LLMProvider)
 class LLMProviderAdmin(admin.ModelAdmin):
-    form = LLMProviderForm
-    list_display = ("name", "model_name", "base_url", "key_count", "is_system_active", "is_active", "created_at")
-    list_filter = ("is_active", "created_at")
+    form = SimpleLLMProviderForm
+    change_list_template = "admin/experiments/llmprovider/change_list.html"
+    change_form_template = "admin/experiments/llmprovider/change_form.html"
+    list_display = ("priority", "name", "base_url", "key_count", "is_active", "created_at")
+    actions = None
     search_fields = ("name", "model_name", "base_url")
-    fieldsets = (
-        ("配置向导", {
-            "fields": ("api_format", "model_preset"),
-            "description": '第一步：选择API格式，第二步：选择模型'
-        }),
-        ("详细配置", {
-            "fields": ("name", "model_name", "base_url", "is_active"),
-            "description": '自动填充的配置信息，选择"自定义"时可手动修改'
-        }),
-        ("时间信息", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
-    )
-    readonly_fields = ("created_at", "updated_at")
+    fields = ("base_url",)
     inlines = [APIKeyInline]
 
     def key_count(self, obj):
         return obj.api_keys.filter(is_active=True).count()
     key_count.short_description = "可用Key数量"
 
-    def is_system_active(self, obj):
-        """显示是否为当前系统使用的提供商"""
-        config = SystemAPIConfig.get_instance()
-        if config.active_provider_id == obj.pk:
-            return "✓ 系统当前使用"
-        return ""
-    is_system_active.short_description = "系统状态"
+    @staticmethod
+    def key_preview(value):
+        if len(value) > 12:
+            return f"{value[:8]}...{value[-4:]}"
+        return value
+
+    def provider_rows(self, queryset):
+        rows = []
+        for index, provider in enumerate(queryset.prefetch_related("api_keys"), start=1):
+            keys = list(provider.api_keys.all())
+            active_keys = [key for key in keys if key.is_active]
+            last_used_values = [key.last_used_at for key in keys if key.last_used_at]
+            previews = [self.key_preview(key.api_key) for key in active_keys[:3]]
+            models = sorted(
+                {
+                    model
+                    for key in active_keys
+                    for model in (key.model_names() or ([provider.model_name] if provider.model_name else []))
+                }
+            )
+            rows.append(
+                {
+                    "order": index,
+                    "provider": provider,
+                    "active_key_count": len(active_keys),
+                    "key_preview": " / ".join(previews) if previews else "未配置启用 Key",
+                    "model_preview": " / ".join(models) if models else "未配置模型",
+                    "last_used_at": max(last_used_values) if last_used_values else None,
+                }
+            )
+        return rows
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<int:provider_id>/move/<str:direction>/",
+                self.admin_site.admin_view(self.move_provider),
+                name="experiments_llmprovider_move",
+            ),
+            path(
+                "<int:provider_id>/toggle/",
+                self.admin_site.admin_view(self.toggle_provider),
+                name="experiments_llmprovider_toggle",
+            ),
+        ]
+        return custom_urls + urls
+
+    def _renumber_priorities(self):
+        for index, provider in enumerate(LLMProvider.objects.order_by("priority", "id"), start=1):
+            if provider.priority != index:
+                provider.priority = index
+                provider.save(update_fields=["priority"])
+
+    def move_provider(self, request, provider_id, direction):
+        if request.method != "POST":
+            return redirect("admin:experiments_llmprovider_changelist")
+        self._renumber_priorities()
+        providers = list(LLMProvider.objects.order_by("priority", "id"))
+        index = next((idx for idx, provider in enumerate(providers) if provider.pk == provider_id), None)
+        if index is None:
+            messages.error(request, "没有找到这个 LLM 供应商。")
+            return redirect("admin:experiments_llmprovider_changelist")
+        target_index = index - 1 if direction == "up" else index + 1
+        if 0 <= target_index < len(providers):
+            current = providers[index]
+            target = providers[target_index]
+            current.priority, target.priority = target.priority, current.priority
+            current.save(update_fields=["priority"])
+            target.save(update_fields=["priority"])
+            messages.success(request, "调用顺序已更新。")
+        return redirect("admin:experiments_llmprovider_changelist")
+
+    def toggle_provider(self, request, provider_id):
+        if request.method != "POST":
+            return redirect("admin:experiments_llmprovider_changelist")
+        provider = LLMProvider.objects.get(pk=provider_id)
+        provider.is_active = not provider.is_active
+        provider.save(update_fields=["is_active"])
+        messages.success(request, f"{provider.name} 已{'启用' if provider.is_active else '停用'}。")
+        return redirect("admin:experiments_llmprovider_changelist")
 
     def changelist_view(self, request, extra_context=None):
-        """在列表顶部显示当前系统配置"""
         extra_context = extra_context or {}
-        config = SystemAPIConfig.get_instance()
-        extra_context['system_config'] = config
-        extra_context['system_api_change_url'] = f"/admin/experiments/systemapiconfig/{config.pk}/change/"
+        queryset = self.get_queryset(request).order_by("priority", "id")
+        extra_context["provider_rows"] = self.provider_rows(queryset)
+        extra_context["add_url"] = reverse("admin:experiments_llmprovider_add")
         return super().changelist_view(request, extra_context=extra_context)
 
     def save_model(self, request, obj, form, change):
-        """根据API格式和模型预设自动填充字段"""
-        api_format = form.cleaned_data.get('api_format')
-        model_preset = form.cleaned_data.get('model_preset')
-
-        # 如果是新建
-        if not change:
-            # 根据API格式设置base_url
-            if api_format and api_format != 'custom':
-                if api_format == 'openai':
-                    obj.base_url = form.BASE_URL_PRESETS['openai']
-                elif api_format == 'anthropic':
-                    obj.base_url = form.BASE_URL_PRESETS['anthropic']
-
-            # 根据模型预设设置model_name和name
-            if model_preset and model_preset != 'custom':
-                obj.model_name = model_preset
-                # 智能生成名称
-                if model_preset.startswith('gpt-5'):
-                    obj.name = 'GPT-5'
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['openai']
-                elif model_preset.startswith('gpt-4'):
-                    obj.name = 'GPT-4'
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['openai']
-                elif 'claude' in model_preset and '4-5' in model_preset:
-                    obj.name = 'Claude 4.5'
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['anthropic']
-                elif 'claude' in model_preset and ('4' in model_preset or '3' in model_preset):
-                    obj.name = f"Claude {model_preset.split('-')[1]}"
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['anthropic']
-                elif 'deepseek' in model_preset:
-                    obj.name = 'DeepSeek'
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['deepseek']
-                elif 'qwen' in model_preset:
-                    obj.name = 'Qwen'
-                    if not obj.base_url:
-                        obj.base_url = form.BASE_URL_PRESETS['qwen']
-
+        obj.name = self._unique_provider_name(obj.base_url, obj.pk)
+        obj.is_active = True
+        if not obj.priority:
+            obj.priority = (LLMProvider.objects.exclude(pk=obj.pk).count() or 0) + 1
         super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        provider = form.instance
+        first_key = provider.api_keys.filter(is_active=True).order_by("usage_count", "id").first()
+        if first_key and first_key.default_model_name() and provider.model_name != first_key.default_model_name():
+            provider.model_name = first_key.default_model_name()
+            provider.save(update_fields=["model_name"])
+
+    @staticmethod
+    def _unique_provider_name(base_url, pk=None):
+        base_name = (base_url or "").replace("https://", "").replace("http://", "").strip("/").split("/")[0] or "LLM"
+        candidate = base_name
+        suffix = 2
+        existing = LLMProvider.objects.all()
+        if pk:
+            existing = existing.exclude(pk=pk)
+        while existing.filter(name=candidate).exists():
+            candidate = f"{base_name} {suffix}"
+            suffix += 1
+        return candidate
 
 
 @admin.register(APIKey)
@@ -265,7 +452,7 @@ class SystemAPIConfigAdmin(admin.ModelAdmin):
 @admin.register(AIMode)
 class AIModeAdmin(admin.ModelAdmin):
     list_display = ("name_zh", "is_enabled", "position")
-    list_filter = ("is_enabled",)
+    actions = None
     search_fields = ("name_zh", "prompt_zh")
     fieldsets = (
         ("基本信息", {

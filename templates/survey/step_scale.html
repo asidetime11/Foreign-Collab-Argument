@@ -5,7 +5,7 @@
 <section class="task-page task-page-scale task-{{ step }}">
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
-    <p class="step-label">{{ step_meta.label }}</p>
+    <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
     <h1>{{ step_meta.title }}</h1>
     {% if statement %}<p class="statement-card">{{ statement }}</p>{% endif %}
     {% if step == "emotion" %}
@@ -22,42 +22,47 @@
     {% csrf_token %}
     {% for item in items %}
       <div class="scale-question" data-scale-id="{{ item.pk }}">
-        <label class="scale-label">{{ item.label_zh }}</label>
-
-        <div class="slider-container">
-          <!-- Left/Right text labels -->
-          <div class="slider-labels">
-            <span class="label-left">{{ item.left_label_zh }}</span>
-            <span class="label-right">{{ item.right_label_zh }}</span>
+        <div class="scale-card">
+          <div class="scale-card-head">
+            <label class="scale-label">{{ item.label_zh }}</label>
+            <span class="scale-value-pill"><span data-scale-value>{{ item.min_value }}</span> / {{ item.max_value }}</span>
           </div>
 
-          <!-- Slider input -->
-          <div class="slider-wrapper">
-            <input
-              type="range"
-              class="scale-slider"
-              min="{{ item.min_value }}"
-              max="{{ item.max_value }}"
-              value="{{ item.min_value }}"
-              step="1"
-              required
-              aria-label="{{ item.label_zh }}"
-              aria-valuemin="{{ item.min_value }}"
-              aria-valuemax="{{ item.max_value }}"
-              aria-valuenow="{{ item.min_value }}"
-            >
+          <div class="slider-container">
+            <!-- Left/Right text labels -->
+            <div class="slider-labels">
+              <span class="label-left">{{ item.left_label_zh }}</span>
+              <span class="label-right">{{ item.right_label_zh }}</span>
+            </div>
+
+            <!-- Slider input -->
+            <div class="slider-wrapper">
+              <input
+                type="range"
+                class="scale-slider"
+                min="{{ item.min_value }}"
+                max="{{ item.max_value }}"
+                value="{{ item.min_value }}"
+                step="1"
+                required
+                aria-label="{{ item.label_zh }}"
+                aria-valuemin="{{ item.min_value }}"
+                aria-valuemax="{{ item.max_value }}"
+                aria-valuenow="{{ item.min_value }}"
+              >
+            </div>
+
+            <!-- Fixed number labels -->
+            <div class="slider-numbers">
+              {% for value in item.values %}
+              <span class="number-label" data-value="{{ value }}">{{ value }}</span>
+              {% endfor %}
+            </div>
           </div>
 
-          <!-- Fixed number labels -->
-          <div class="slider-numbers">
-            {% for value in item.values %}
-            <span class="number-label" data-value="{{ value }}">{{ value }}</span>
-            {% endfor %}
-          </div>
+          <!-- Hidden input for form submission -->
+          <input type="hidden" name="item_{{ item.pk }}" class="rating-value" value="{{ item.min_value }}" required>
         </div>
-
-        <!-- Hidden input for form submission -->
-        <input type="hidden" name="item_{{ item.pk }}" class="rating-value" value="{{ item.min_value }}" required>
       </div>
     {% endfor %}
     <p class="soft-alert" role="status" aria-live="polite" hidden>请先完成所有滑杆，再继续。</p>

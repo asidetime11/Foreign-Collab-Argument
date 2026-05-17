@@ -14,13 +14,14 @@ from apps.experiments.defaults import DEFAULT_TOPIC_ORDER_INTRO_ZH
 from apps.experiments.models import AIMode, ScaleItem
 
 from .comment_identity import comment_avatar_file, comment_display_name
-from .forms import AIModeForm, CommentReactionForm, ScaleForm, TextResponseForm, TopicOrderForm
-from .models import CommentReaction, ScaleResponse, SurveySession, TextResponse
+from .forms import AIModeForm, CommentReactionForm, EnglishPaperForm, ScaleForm, TextResponseForm, TopicOrderForm
+from .models import CommentReaction, EnglishPaperDraft, EnglishPaperResponse, PostReaction, ScaleResponse, SurveySession, TextResponse
 from .services import (
     SESSION_DONE,
     STEP_TOPIC_ORDER,
     advance_after_mode,
     complete_round_step,
+    complete_english_paper,
     current_round,
     current_step,
     get_or_create_session,
@@ -42,15 +43,16 @@ STEP_META = {
     "ai_eval": {"number": 8, "title": "对人工智能的评价", "kind": "ai_eval"},
     "stance_after": {"number": 9, "title": "再次确认你的观点", "kind": "stance"},
     "final_text": {"number": 10, "title": "写下你的新想法", "kind": "text"},
-    "done": {"number": 11, "title": "已完成，感谢你的参与", "kind": "done"},
+    "english_paper": {"number": 11, "title": "英文论文写作", "kind": "text"},
+    "done": {"number": 12, "title": "已完成，感谢你的参与", "kind": "done"},
 }
 
 
 def _step_context(step):
     meta = STEP_META[step].copy()
-    meta["total"] = 11
-    meta["label"] = f"第 {meta['number']} 站 / 共 11 站"
-    meta["route"] = range(1, 12)
+    meta["total"] = 12
+    meta["label"] = f"第 {meta['number']} 站"
+    meta["route"] = range(1, 13)
     return meta
 
 
@@ -62,15 +64,11 @@ def _localized(material, field, language):
 
 def _guard_session(request):
     profile = request.user.participant_profile
-    if not profile.has_required_display_name:
-        return None, redirect("accounts:profile_prompt")
     if not profile.batch:
         return None, render(request, "survey/start.html", {"missing_batch": True})
     try:
         return get_or_create_session(request.user, "zh-hans"), None
     except ValueError as exc:
-        if str(exc) == "missing_display_name":
-            return None, redirect("accounts:profile_prompt")
         return None, render(request, "survey/start.html", {"missing_batch": True})
 
 
@@ -80,6 +78,8 @@ def _current_route(session):
         return reverse("survey:topic_order")
     if step == SESSION_DONE:
         return reverse("survey:done")
+    if step == SurveySession.STEP_ENGLISH_PAPER:
+        return reverse("survey:english_paper")
     if step == "post":
         return reverse("survey:post")
     if step in {"emotion", "stance_before", "ai_eval", "stance_after"}:
@@ -112,6 +112,24 @@ def _chat_remaining_seconds(round_obj, minutes):
         started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
     elapsed = int((timezone.now() - started_at).total_seconds())
     return max(total_seconds - elapsed, 0)
+
+
+def _remaining_seconds_from_started(started_raw, total_seconds):
+    if not started_raw:
+        return total_seconds
+    started_at = parse_datetime(started_raw)
+    if not started_at:
+        return total_seconds
+    if timezone.is_naive(started_at):
+        started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
+    elapsed = int((timezone.now() - started_at).total_seconds())
+    return max(total_seconds - elapsed, 0)
+
+
+def _round_progress_context(session):
+    total = max(session.rounds.count(), len(session.round_order), 1)
+    current = min(int(session.current_round_index or 0) + 1, total)
+    return {"current_post_number": current, "total_posts": total}
 
 
 @login_required
@@ -173,6 +191,7 @@ def post(request):
     if request.method == "POST":
         form = CommentReactionForm(comments, request.POST)
         if form.is_valid():
+            PostReaction.objects.create(round=round_obj, reaction=form.cleaned_data.get("post_reaction") or "none")
             for comment in comments:
                 reaction = form.cleaned_data.get(f"comment_{comment['id']}") or "none"
                 CommentReaction.objects.create(round=round_obj, comment_snapshot_id=comment["id"], reaction=reaction)
@@ -184,6 +203,8 @@ def post(request):
     material = {
         "title": _localized(round_obj.material_snapshot, "title", language),
         "post_body": _localized(round_obj.material_snapshot, "post_body", language),
+        "author": comment_display_name(len(comments)),
+        "avatar_file": comment_avatar_file(len(comments)),
         "comments": [
             {
                 **comment,
@@ -197,7 +218,13 @@ def post(request):
     return render(
         request,
         "survey/step_post.html",
-        {"form": form, "round": round_obj, "material": material, "step_meta": _step_context("post")},
+        {
+            "form": form,
+            "round": round_obj,
+            "material": material,
+            "step_meta": _step_context("post"),
+            **_round_progress_context(session),
+        },
     )
 
 
@@ -249,6 +276,7 @@ def scale(request, step):
             "round": round_obj,
             "statement": statement,
             "step_meta": _step_context(step),
+            **_round_progress_context(session),
         },
     )
 
@@ -282,7 +310,13 @@ def text_response(request, step):
     return render(
         request,
         "survey/step_text.html",
-        {"form": form, "step": step, "round": round_obj, "step_meta": _step_context(step)},
+        {
+            "form": form,
+            "step": step,
+            "round": round_obj,
+            "step_meta": _step_context(step),
+            **_round_progress_context(session),
+        },
     )
 
 
@@ -307,7 +341,13 @@ def mode_select(request):
     return render(
         request,
         "survey/step_mode.html",
-        {"form": form, "modes": modes, "round": round_obj, "step_meta": _step_context("mode")},
+        {
+            "form": form,
+            "modes": modes,
+            "round": round_obj,
+            "step_meta": _step_context("mode"),
+            **_round_progress_context(session),
+        },
     )
 
 
@@ -333,6 +373,7 @@ def chat(request):
             "remaining_seconds": _chat_remaining_seconds(round_obj, session.batch.ai_chat_minutes),
             "chat_messages": chat_messages,
             "step_meta": _step_context("chat"),
+            **_round_progress_context(session),
         },
     )
 
@@ -348,6 +389,74 @@ def done(request):
     language = session.language
     outro = session.batch_snapshot.get("outro_en") if language.startswith("en") else session.batch_snapshot.get("outro_zh")
     return render(request, "survey/done.html", {"session": session, "outro": outro, "step_meta": _step_context("done")})
+
+
+@login_required
+def english_paper(request):
+    session, response = _guard_session(request)
+    if response:
+        return response
+    wrong_step = _require_current(session, SurveySession.STEP_ENGLISH_PAPER)
+    if wrong_step:
+        return wrong_step
+    prompt = session.batch.english_paper_prompt or session.batch_snapshot.get("english_paper_prompt", "")
+    duration_hours = session.batch.english_paper_duration_hours or session.batch_snapshot.get("english_paper_duration_hours", 24)
+    total_seconds = max(int(duration_hours or 0) * 3600, 0)
+    remaining_seconds = _remaining_seconds_from_started(
+        session.step_started_at.get(SurveySession.STEP_ENGLISH_PAPER),
+        total_seconds,
+    )
+    draft = EnglishPaperDraft.objects.filter(session=session).first()
+    if request.method == "POST":
+        form = EnglishPaperForm(request.POST)
+        if form.is_valid():
+            EnglishPaperResponse.objects.update_or_create(
+                session=session,
+                defaults={
+                    "prompt": prompt,
+                    "duration_hours": duration_hours,
+                    "paper_text": form.cleaned_data["paper_text"].strip(),
+                },
+            )
+            complete_english_paper(session)
+            return redirect(_current_route(session))
+    else:
+        form = EnglishPaperForm(initial={"paper_text": draft.paper_text if draft else ""})
+    return render(
+        request,
+        "survey/step_english_paper.html",
+        {
+            "form": form,
+            "session": session,
+            "prompt": prompt,
+            "duration_hours": duration_hours,
+            "remaining_seconds": remaining_seconds,
+            "draft": draft,
+            "step_meta": _step_context("english_paper"),
+        },
+    )
+
+
+@login_required
+@require_POST
+def english_paper_draft(request):
+    session, response = _guard_session(request)
+    if response:
+        return response
+    wrong_step = _require_current(session, SurveySession.STEP_ENGLISH_PAPER)
+    if wrong_step:
+        return HttpResponseBadRequest("english paper step is not active")
+    prompt = session.batch.english_paper_prompt or session.batch_snapshot.get("english_paper_prompt", "")
+    duration_hours = session.batch.english_paper_duration_hours or session.batch_snapshot.get("english_paper_duration_hours", 24)
+    draft, _created = EnglishPaperDraft.objects.update_or_create(
+        session=session,
+        defaults={
+            "prompt": prompt,
+            "duration_hours": duration_hours,
+            "paper_text": request.POST.get("paper_text", "").strip(),
+        },
+    )
+    return JsonResponse({"ok": True, "saved_at": timezone.localtime(draft.saved_at).strftime("%H:%M")})
 
 
 @login_required

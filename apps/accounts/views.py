@@ -1,5 +1,4 @@
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
@@ -18,8 +17,8 @@ def register(request):
             profile = user.participant_profile
             profile.batch = ExperimentBatch.objects.filter(is_active=True).first()
             profile.save(update_fields=["batch"])
-            login(request, user)
-            return redirect("accounts:profile_prompt")
+            messages.success(request, "注册成功，请登录。")
+            return redirect("login")
     else:
         form = ParticipantRegistrationForm()
     return render(request, "accounts/register.html", {"form": form})
@@ -27,15 +26,7 @@ def register(request):
 
 @login_required
 def profile_prompt(request):
-    profile = request.user.participant_profile
-    if request.method == "POST":
-        form = NicknameForm(request.POST, instance=profile)
-        if form.is_valid():
-            form.save()
-            return redirect("survey:start")
-    else:
-        form = NicknameForm(instance=profile)
-    return render(request, "accounts/profile_prompt.html", {"form": form})
+    return redirect("accounts:profile_edit")
 
 
 @login_required

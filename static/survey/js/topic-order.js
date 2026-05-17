@@ -14,18 +14,17 @@
     currentItems.forEach((item, index) => {
       item.classList.toggle("is-first", index === 0);
       item.classList.toggle("is-last", index === currentItems.length - 1);
-      // Update topic number
-      const numberElement = item.querySelector('.topic-number');
-      if (numberElement) {
-        numberElement.textContent = index + 1;
-      }
     });
   }
 
   let dragged = null;
+  let activeDragElement = null;
+  let activePointerId = null;
   let dragOverTarget = null;
   let autoScrollFrame = null;
   let autoScrollSpeed = 0;
+  let pendingClientY = null;
+  let moveFrame = null;
 
   function setStatus(message) {
     if (status) status.textContent = message;
@@ -43,6 +42,23 @@
     clearDragOver();
     dragOverTarget = target;
     if (dragOverTarget) dragOverTarget.classList.add("drag-over");
+  }
+
+  function animateReorder(callback) {
+    const before = new Map(items().map((item) => [item, item.getBoundingClientRect()]));
+    callback();
+    items().forEach((item) => {
+      const start = before.get(item);
+      if (!start) return;
+      const end = item.getBoundingClientRect();
+      const deltaY = start.top - end.top;
+      if (!deltaY) return;
+      item.style.transition = "none";
+      item.style.transform = `translateY(${deltaY}px)`;
+      item.getBoundingClientRect();
+      item.style.transition = "";
+      item.style.transform = "";
+    });
   }
 
   function stopAutoScroll() {
@@ -80,6 +96,38 @@
     if (!autoScrollFrame) autoScrollFrame = window.requestAnimationFrame(autoScrollLoop);
   }
 
+  function insertBeforeForY(clientY) {
+    return items().find((item) => {
+      if (item === dragged) return false;
+      const rect = item.getBoundingClientRect();
+      return clientY < rect.top + rect.height / 2;
+    }) || null;
+  }
+
+  function moveDragged(clientY) {
+    if (!dragged) return;
+    const beforeNode = insertBeforeForY(clientY);
+    const visibleTarget = beforeNode || items().filter((item) => item !== dragged).at(-1) || null;
+    setDragOver(visibleTarget);
+
+    if (beforeNode === dragged || beforeNode === dragged.nextElementSibling) return;
+    if (!beforeNode && dragged === items().at(-1)) return;
+
+    animateReorder(() => {
+      list.insertBefore(dragged, beforeNode);
+    });
+    sync();
+  }
+
+  function scheduleMove(clientY) {
+    pendingClientY = clientY;
+    if (moveFrame) return;
+    moveFrame = window.requestAnimationFrame(() => {
+      moveFrame = null;
+      moveDragged(pendingClientY);
+    });
+  }
+
   function flashMoved(item) {
     item.classList.remove("just-moved");
     window.requestAnimationFrame(() => {
@@ -88,60 +136,66 @@
     });
   }
 
+  function beginDrag(event) {
+    if (event.target.closest("button, a, input, textarea, select")) return;
+    const item = event.target.closest("[data-topic-id]");
+    if (!item) return;
+    event.preventDefault();
+
+    dragged = item;
+    activeDragElement = item;
+    activePointerId = event.pointerId;
+    activeDragElement.setPointerCapture(activePointerId);
+    dragged.classList.add("dragging");
+    list.classList.add("dragging-active");
+    setStatus("正在拖动，移动到目标位置后松开即可。");
+    scheduleMove(event.clientY);
+  }
+
   function finishDrag(message) {
-    if (dragged) dragged.classList.remove("dragging");
+    if (!dragged) return;
+    const dropped = dragged;
+    if (moveFrame) {
+      window.cancelAnimationFrame(moveFrame);
+      moveFrame = null;
+    }
+    if (activeDragElement && activePointerId !== null) {
+      try {
+        activeDragElement.releasePointerCapture(activePointerId);
+      } catch (error) {
+        // Pointer capture can already be released by the browser.
+      }
+    }
+    dropped.classList.remove("dragging");
+    dropped.classList.add("drop-bounce");
+    window.setTimeout(() => dropped.classList.remove("drop-bounce"), 300);
     list.classList.remove("dragging-active");
     clearDragOver();
     stopAutoScroll();
     dragged = null;
+    activeDragElement = null;
+    activePointerId = null;
+    pendingClientY = null;
     sync();
     setStatus(message || "排序已更新。");
   }
 
-  list.addEventListener("dragstart", (event) => {
-    dragged = event.target.closest("[data-topic-id]");
-    if (!dragged) return;
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", dragged.dataset.topicId);
-    dragged.classList.add("dragging");
-    list.classList.add("dragging-active");
-    setStatus("正在拖动，移到目标位置后松开即可。");
+  list.addEventListener("pointerdown", beginDrag);
+
+  document.addEventListener("pointermove", (event) => {
+    if (!dragged || event.pointerId !== activePointerId) return;
+    event.preventDefault();
+    updateAutoScroll(event.clientY);
+    scheduleMove(event.clientY);
   });
 
-  list.addEventListener("dragend", () => {
-    if (dragged) {
-      // Add bounce animation
-      dragged.classList.add('drop-bounce');
-      setTimeout(() => {
-        if (dragged) dragged.classList.remove('drop-bounce');
-      }, 300);
-    }
+  document.addEventListener("pointerup", (event) => {
+    if (!dragged || event.pointerId !== activePointerId) return;
     finishDrag("排序已更新。");
   });
 
-  list.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    const target = event.target.closest("[data-topic-id]");
-    if (!target || !dragged || target === dragged) return;
-    const rect = target.getBoundingClientRect();
-    setDragOver(target);
-    list.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
-    // Update numbers in real-time during drag
-    sync();
-  });
-
-  list.addEventListener("dragleave", (event) => {
-    if (!list.contains(event.relatedTarget)) clearDragOver();
-  });
-
-  document.addEventListener("dragover", (event) => {
-    if (!dragged) return;
-    event.preventDefault();
-    updateAutoScroll(event.clientY);
-  });
-
-  document.addEventListener("drop", () => {
-    if (!dragged) return;
+  document.addEventListener("pointercancel", (event) => {
+    if (!dragged || event.pointerId !== activePointerId) return;
     finishDrag("排序已更新。");
   });
 
@@ -150,10 +204,9 @@
     if (!button) return;
     const item = button.closest("[data-topic-id]");
     if (button.dataset.move === "up" && item.previousElementSibling) {
-      list.insertBefore(item, item.previousElementSibling);
-    }
-    if (button.dataset.move === "down" && item.nextElementSibling) {
-      list.insertBefore(item.nextElementSibling, item);
+      animateReorder(() => list.insertBefore(item, item.previousElementSibling));
+    } else if (button.dataset.move === "down" && item.nextElementSibling) {
+      animateReorder(() => list.insertBefore(item.nextElementSibling, item));
     }
     sync();
     flashMoved(item);

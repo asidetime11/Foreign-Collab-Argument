@@ -1,170 +1,105 @@
-(function() {
-    'use strict';
+(function () {
+  "use strict";
 
-    // OAI格式的模型列表
-    const OAI_MODELS = [
-        {value: '', label: '--- 选择模型 ---'},
-        {value: 'gpt-5-turbo', label: 'GPT-5 Turbo', name: 'GPT-5'},
-        {value: 'gpt-5', label: 'GPT-5', name: 'GPT-5'},
-        {value: 'gpt-4o', label: 'GPT-4o', name: 'GPT-4'},
-        {value: 'gpt-4-turbo', label: 'GPT-4 Turbo', name: 'GPT-4'},
-        {value: 'gpt-4', label: 'GPT-4', name: 'GPT-4'},
-        {value: 'deepseek-chat', label: 'DeepSeek Chat', name: 'DeepSeek'},
-        {value: 'deepseek-reasoner', label: 'DeepSeek Reasoner', name: 'DeepSeek'},
-        {value: 'qwen-max', label: 'Qwen Max', name: 'Qwen'},
-        {value: 'qwen-plus', label: 'Qwen Plus', name: 'Qwen'},
-        {value: 'qwen-turbo', label: 'Qwen Turbo', name: 'Qwen'},
-        {value: 'custom', label: '🔧 自定义'},
-    ];
+  const MODEL_GROUPS = {
+    openai: [
+      { value: "", label: "--- 选择模型 ---" },
+      { value: "gpt-5.4-mini", label: "GPT-5.4 mini（推荐：质量/成本均衡）", name: "OpenAI GPT-5.4 mini" },
+      { value: "gpt-5-mini", label: "GPT-5 mini（性价比通用）", name: "OpenAI GPT-5 mini" },
+      { value: "gpt-5-nano", label: "GPT-5 nano（低成本快速）", name: "OpenAI GPT-5 nano" },
+      { value: "custom", label: "自定义" },
+    ],
+    deepseek: [
+      { value: "", label: "--- 选择模型 ---" },
+      { value: "deepseek-chat", label: "DeepSeek Chat（低成本通用）", name: "DeepSeek Chat" },
+      { value: "deepseek-reasoner", label: "DeepSeek Reasoner（推理任务）", name: "DeepSeek Reasoner" },
+      { value: "custom", label: "自定义" },
+    ],
+    qwen: [
+      { value: "", label: "--- 选择模型 ---" },
+      { value: "qwen-plus", label: "Qwen Plus（中文/通用性价比）", name: "Qwen Plus" },
+      { value: "qwen-turbo", label: "Qwen Turbo（低成本快速）", name: "Qwen Turbo" },
+      { value: "qwen-max", label: "Qwen Max（质量优先）", name: "Qwen Max" },
+      { value: "custom", label: "自定义" },
+    ],
+    anthropic: [
+      { value: "", label: "--- 选择模型 ---" },
+      { value: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5（质量优先）", name: "Claude Sonnet 4.5" },
+      { value: "custom", label: "自定义" },
+    ],
+  };
 
-    // Anthropic格式的模型列表
-    const ANTHROPIC_MODELS = [
-        {value: '', label: '--- 选择模型 ---'},
-        {value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', name: 'Claude 4.5'},
-        {value: 'claude-opus-4-20250514', label: 'Claude Opus 4', name: 'Claude 4'},
-        {value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet', name: 'Claude 3.5'},
-        {value: 'claude-3-opus-20240229', label: 'Claude 3 Opus', name: 'Claude 3'},
-        {value: 'custom', label: '🔧 自定义'},
-    ];
+  const BASE_URLS = {
+    openai: "https://api.openai.com/v1",
+    deepseek: "https://api.deepseek.com/v1",
+    qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    anthropic: "https://api.anthropic.com/v1",
+  };
 
-    // API地址预设
-    const BASE_URLS = {
-        'openai': 'https://api.openai.com/v1',
-        'anthropic': 'https://api.anthropic.com/v1',
-        'deepseek': 'https://api.deepseek.com/v1',
-        'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    };
+  function initForm() {
+    const apiFormatSelect = document.getElementById("id_api_format");
+    const modelPresetSelect = document.getElementById("id_model_preset");
+    const nameField = document.getElementById("id_name");
+    const modelNameField = document.getElementById("id_model_name");
+    const baseUrlField = document.getElementById("id_base_url");
 
-    function initForm() {
-        const apiFormatSelect = document.getElementById('id_api_format');
-        const modelPresetSelect = document.getElementById('id_model_preset');
-        const nameField = document.getElementById('id_name');
-        const modelNameField = document.getElementById('id_model_name');
-        const baseUrlField = document.getElementById('id_base_url');
+    if (!apiFormatSelect || !modelPresetSelect || !nameField || !modelNameField || !baseUrlField) return;
 
-        if (!apiFormatSelect || !modelPresetSelect) return;
-
-        // 更新模型列表
-        function updateModelList(format) {
-            const models = format === 'anthropic' ? ANTHROPIC_MODELS : OAI_MODELS;
-            const currentValue = modelPresetSelect.value;
-
-            // 清空现有选项
-            modelPresetSelect.innerHTML = '';
-
-            // 添加新选项
-            models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model.value;
-                option.textContent = model.label;
-                modelPresetSelect.appendChild(option);
-            });
-
-            // 尝试保持之前的选择
-            if (currentValue && modelPresetSelect.querySelector(`option[value="${currentValue}"]`)) {
-                modelPresetSelect.value = currentValue;
-            }
-        }
-
-        // API格式改变时
-        apiFormatSelect.addEventListener('change', function() {
-            const format = this.value;
-
-            if (format === 'custom') {
-                // 选择自定义，清空让用户填写
-                baseUrlField.focus();
-            } else if (format && format !== '') {
-                // 选择预设格式
-                updateModelList(format);
-
-                // 设置对应的base_url
-                if (format === 'openai') {
-                    baseUrlField.value = BASE_URLS.openai;
-                } else if (format === 'anthropic') {
-                    baseUrlField.value = BASE_URLS.anthropic;
-                }
-
-                // 重置模型选择
-                modelPresetSelect.value = '';
-            }
-        });
-
-        // 模型改变时
-        modelPresetSelect.addEventListener('change', function() {
-            const value = this.value;
-
-            if (value === 'custom') {
-                // 选择自定义，清空让用户填写
-                if (!modelNameField.value) {
-                    modelNameField.value = '';
-                }
-                if (!nameField.value) {
-                    nameField.value = '';
-                }
-                modelNameField.focus();
-            } else if (value && value !== '') {
-                // 选择预设模型
-                const apiFormat = apiFormatSelect.value;
-                const models = apiFormat === 'anthropic' ? ANTHROPIC_MODELS : OAI_MODELS;
-                const selectedModel = models.find(m => m.value === value);
-
-                if (selectedModel) {
-                    // 填充model_name
-                    modelNameField.value = value;
-
-                    // 填充name
-                    if (selectedModel.name) {
-                        nameField.value = selectedModel.name;
-                    }
-
-                    // 根据模型设置合适的base_url
-                    if (value.startsWith('deepseek')) {
-                        baseUrlField.value = BASE_URLS.deepseek;
-                    } else if (value.startsWith('qwen')) {
-                        baseUrlField.value = BASE_URLS.qwen;
-                    } else if (value.startsWith('gpt')) {
-                        baseUrlField.value = BASE_URLS.openai;
-                    } else if (value.includes('claude')) {
-                        baseUrlField.value = BASE_URLS.anthropic;
-                    }
-                }
-            }
-        });
-
-        // 为字段添加样式提示
-        function updateFieldStyle(field, isEmpty) {
-            if (isEmpty) {
-                field.style.borderColor = '#ffa500';
-                field.style.backgroundColor = '#fffef0';
-            } else {
-                field.style.borderColor = '';
-                field.style.backgroundColor = '';
-            }
-        }
-
-        // 监听name字段变化
-        nameField.addEventListener('input', function() {
-            const isEmpty = !this.value.trim();
-            updateFieldStyle(this, isEmpty && modelPresetSelect.value === 'custom');
-        });
-
-        // 监听model_name字段变化
-        modelNameField.addEventListener('input', function() {
-            const isEmpty = !this.value.trim();
-            updateFieldStyle(this, isEmpty && modelPresetSelect.value === 'custom');
-        });
-
-        // 监听base_url字段变化
-        baseUrlField.addEventListener('input', function() {
-            const isEmpty = !this.value.trim();
-            updateFieldStyle(this, isEmpty && apiFormatSelect.value === 'custom');
-        });
+    function modelsFor(format) {
+      return MODEL_GROUPS[format] || MODEL_GROUPS.openai;
     }
 
-    // 页面加载完成后初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initForm);
-    } else {
-        initForm();
+    function updateModelList(format) {
+      const currentValue = modelPresetSelect.value;
+      modelPresetSelect.innerHTML = "";
+      modelsFor(format).forEach((model) => {
+        const option = document.createElement("option");
+        option.value = model.value;
+        option.textContent = model.label;
+        modelPresetSelect.appendChild(option);
+      });
+      if (currentValue && modelPresetSelect.querySelector(`option[value="${currentValue}"]`)) {
+        modelPresetSelect.value = currentValue;
+      } else {
+        modelPresetSelect.value = "";
+      }
     }
+
+    function selectedModel() {
+      return modelsFor(apiFormatSelect.value).find((model) => model.value === modelPresetSelect.value);
+    }
+
+    apiFormatSelect.addEventListener("change", function () {
+      const format = this.value;
+      updateModelList(format);
+      if (BASE_URLS[format]) {
+        baseUrlField.value = BASE_URLS[format];
+      }
+      if (format === "custom") {
+        baseUrlField.focus();
+      }
+    });
+
+    modelPresetSelect.addEventListener("change", function () {
+      if (this.value === "custom") {
+        modelNameField.focus();
+        return;
+      }
+      const model = selectedModel();
+      if (!model || !model.value) return;
+      modelNameField.value = model.value;
+      nameField.value = model.name || model.value;
+      if (BASE_URLS[apiFormatSelect.value]) {
+        baseUrlField.value = BASE_URLS[apiFormatSelect.value];
+      }
+    });
+
+    updateModelList(apiFormatSelect.value || "openai");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initForm);
+  } else {
+    initForm();
+  }
 })();

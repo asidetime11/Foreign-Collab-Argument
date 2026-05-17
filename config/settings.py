@@ -85,15 +85,12 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [BASE_DIR / "static", BASE_DIR / "assets"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "survey:start"
 LOGOUT_REDIRECT_URL = "login"
 
-DUBRIFY_BASE_URL = os.getenv("DUBRIFY_BASE_URL", "https://api.dubrify.com/v1")
-DUBRIFY_API_KEY = os.getenv("DUBRIFY_API_KEY", "")
-DEFAULT_CHAT_MODEL = os.getenv("DEFAULT_CHAT_MODEL", "deepseek-r1")
 DEFAULT_TRANSCRIBE_MODEL = os.getenv("DEFAULT_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
 
 if "test" in sys.argv:

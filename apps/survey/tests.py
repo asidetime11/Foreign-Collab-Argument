@@ -11,7 +11,15 @@ from django.utils import timezone
 
 from apps.accounts.models import ParticipantProfile
 from apps.experiments.models import AIMode, ExperimentBatch, ScaleItem, Topic
-from apps.survey.models import CommentReaction, ConversationMessage, QualityEvent, SurveySession
+from apps.survey.models import (
+    CommentReaction,
+    ConversationMessage,
+    EnglishPaperDraft,
+    EnglishPaperResponse,
+    PostReaction,
+    QualityEvent,
+    SurveySession,
+)
 from apps.survey.services import current_step, get_or_create_session, submit_topic_order
 
 
@@ -111,13 +119,18 @@ class SurveyViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/accounts/login/", response["Location"])
 
-    def test_missing_display_name_redirects_to_prompt(self):
+    def test_missing_display_name_can_start_survey(self):
         user = User.objects.create_user("p002", password="pass")
+        batch = ExperimentBatch.objects.create(name="批次 A", intro_zh="请按照你的真实想法排序。", is_active=True)
+        user.participant_profile.batch = batch
+        user.participant_profile.save(update_fields=["batch"])
+        for index in range(2):
+            Topic.objects.create(batch=batch, title_zh=f"话题 {index}", title_en=f"Topic {index}", position=index)
         self.client.force_login(user)
 
         response = self.client.get(reverse("survey:start"))
 
-        self.assertRedirects(response, reverse("accounts:profile_prompt"))
+        self.assertRedirects(response, reverse("survey:topic_order"))
 
     def test_missing_batch_shows_message(self):
         user = User.objects.create_user("p003", password="pass")
@@ -167,7 +180,8 @@ class SurveyViewTests(TestCase):
 
         response = self.client.get(reverse("survey:topic_order"))
 
-        self.assertContains(response, "第 1 站 / 共 11 站")
+        self.assertContains(response, "第 1 站")
+        self.assertNotContains(response, "共 12 站")
         self.assertContains(response, "先排一排你最在意的话题")
         self.assertContains(response, "我们正在进行一项关于中国青少年的研究")
         self.assertContains(response, "从上到下：最重要 → 最不重要")
@@ -205,6 +219,7 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, 'class="topic-card"', count=10)
         self.assertContains(response, 'class="drag-handle"', count=10)
         self.assertContains(response, 'class="topic-content"', count=10)
+        self.assertNotContains(response, 'class="topic-number"')
         self.assertContains(response, 'data-move="up"')
         self.assertContains(response, 'data-move="down"')
         self.assertContains(response, 'name="ordered_topic_ids"')
@@ -218,21 +233,27 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:topic_order"))
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "topic-order.js").read_text(encoding="utf-8")
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
-        dragover_block = script.split('list.addEventListener("dragover"', 1)[1].split('list.addEventListener("dragleave"', 1)[0]
-
         self.assertContains(response, 'data-drag-status')
+        self.assertContains(response, 'data-drag-handle')
+        self.assertNotContains(response, 'draggable="true"')
+        self.assertIn('event.target.closest("[data-topic-id]")', script)
+        self.assertIn('event.target.closest("button, a, input, textarea, select")', script)
         self.assertIn("function updateAutoScroll", script)
         self.assertIn("window.scrollBy", script)
-        self.assertIn('document.addEventListener("dragover"', script)
-        self.assertIn('document.addEventListener("drop"', script)
-        self.assertIn("let dragOverTarget = null", script)
-        self.assertIn("setDragOver(target)", dragover_block)
-        # sync() is now called during dragover for real-time number updates
-        self.assertIn("sync();", dragover_block)
+        self.assertIn("pointerdown", script)
+        self.assertIn("pointermove", script)
+        self.assertIn("setPointerCapture", script)
+        self.assertIn("function moveDragged", script)
+        self.assertIn("function animateReorder", script)
+        self.assertIn("getBoundingClientRect", script)
+        self.assertIn("translateY", script)
         self.assertIn("dragging-active", script)
         self.assertIn("drag-over", script)
         self.assertIn(".topic-list.dragging-active", stylesheet)
+        self.assertIn("color: var(--color-primary)", stylesheet)
+        self.assertIn("box-shadow:", stylesheet)
         self.assertIn(".topic-card.drag-over", stylesheet)
+        self.assertIn("cubic-bezier(0.2, 0, 0, 1)", stylesheet)
 
     def test_post_page_renders_optional_like_dislike_controls(self):
         self.create_round_for_step("post", username="p_post")
@@ -240,24 +261,35 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:post"))
 
         self.assertContains(response, "阅读帖子与评论")
+        self.assertContains(response, "第 1 / 1 个帖子")
+        self.assertNotContains(response, 'class="round-pill"')
+        self.assertContains(response, "可以给帖子和留言点赞或点踩~")
+        self.assertContains(response, 'type="hidden" name="post_reaction" value="none"')
         self.assertContains(response, 'type="hidden" name="comment_1" value="none"')
-        self.assertContains(response, 'class="reaction-button"', count=2)
+        self.assertContains(response, 'class="reaction-button"', count=4)
         self.assertContains(response, 'data-reaction="like"')
         self.assertContains(response, 'data-reaction="dislike"')
         self.assertContains(response, 'aria-label="赞 小兔 的评论"')
         self.assertContains(response, 'aria-label="踩 小兔 的评论"')
+        self.assertContains(response, 'class="avatar avatar-large"')
         self.assertContains(response, 'class="avatar avatar-small"')
         self.assertContains(response, "survey/img/avatar")
         self.assertContains(response, "survey/img/like.png")
         self.assertContains(response, "survey/img/dislike.png")
-        # New design has 4 reaction-icon instances: 2 in post-actions (emoji), 2 in comments (img)
+        self.assertContains(response, "survey/img/avatar2.png")
+        self.assertNotContains(response, "avatar-1.png")
+        self.assertNotContains(response, "Anonymous")
+        self.assertNotContains(response, 'class="comment-count"')
+        self.assertNotContains(response, "like-count")
+        self.assertNotContains(response, "Like")
+        self.assertNotContains(response, "Dislike")
+        self.assertNotContains(response, "reaction-btn")
+        self.assertNotContains(response, "reaction-label")
+        # Post and comment actions both use image icons.
         self.assertContains(response, 'class="reaction-icon"', count=4)
         self.assertContains(response, "survey/js/reactions.js")
         self.assertNotContains(response, "dicebear.com")
         self.assertNotContains(response, 'class="comic-thumb')
-        # New design shows emoji thumbs in post-actions
-        self.assertContains(response, "👍")
-        self.assertContains(response, "👎")
         self.assertNotContains(response, "不选择")
         self.assertNotContains(response, 'type="radio"')
         self.assertNotContains(response, 'class="reaction-choice"')
@@ -280,7 +312,7 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:post"))
         content = response.content.decode("utf-8")
 
-        avatar_files = re.findall(r"survey/img/(avatar\d+\.png)", content)
+        avatar_files = re.findall(r'survey/img/(avatar\d+\.png)"\s+alt="" class="avatar avatar-small"', content)
         self.assertEqual(len(avatar_files), 3)
         self.assertEqual(len(set(avatar_files)), 3)
         self.assertNotIn("avatar4.png", avatar_files)
@@ -359,22 +391,41 @@ class SurveyViewTests(TestCase):
     def test_post_page_saves_comment_interactions(self):
         user, batch, session, round_obj = self.create_round_for_step("post", username="p_post_save_reaction")
 
-        response = self.client.post(reverse("survey:post"), {"comment_1": "like"})
+        response = self.client.post(reverse("survey:post"), {"post_reaction": "dislike", "comment_1": "like"})
 
         self.assertEqual(response.status_code, 302)
+        post_reaction = PostReaction.objects.get(round=round_obj)
+        self.assertEqual(post_reaction.reaction, "dislike")
         reaction = CommentReaction.objects.get(round=round_obj, comment_snapshot_id=1)
         self.assertEqual(reaction.reaction, "like")
 
     def test_post_styles_use_frameless_small_reaction_icons(self):
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
 
-        self.assertIn(".comment-card .reaction-button", stylesheet)
-        self.assertIn("width: 30px", stylesheet)
+        self.assertIn(".reaction-button", stylesheet)
+        self.assertIn("width: 34px", stylesheet)
         self.assertIn("border: 0", stylesheet)
         self.assertIn("background: transparent", stylesheet)
-        self.assertIn("box-shadow: none", stylesheet)
+        self.assertIn('.reaction-button.active::after', stylesheet)
+        self.assertIn('box-shadow: 0 0 0 2px rgba(64, 168, 232, .36)', stylesheet)
         self.assertIn("outline: 0", stylesheet)
         self.assertIn("width: 22px", stylesheet)
+
+    def test_round_step_label_is_shared_across_post_steps(self):
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+        partial = (Path(settings.BASE_DIR) / "templates" / "survey" / "partials" / "round_step_label.html").read_text(encoding="utf-8")
+
+        self.assertIn(".step-label", stylesheet)
+        self.assertIn("current_post_number", partial)
+        self.assertIn("total_posts", partial)
+        self.assertIn("个帖子", partial)
+
+    def test_bottom_submit_area_uses_container_styling(self):
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn(".sticky-submit", stylesheet)
+        self.assertIn("border: 1px solid rgba(216, 228, 223, .9)", stylesheet)
+        self.assertIn("background: rgba(255, 255, 255, .96)", stylesheet)
 
     def test_scale_page_renders_clickable_slider_controls(self):
         self.create_round_for_step("stance_before", username="p_scale")
@@ -382,7 +433,11 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:scale", args=["stance_before"]))
 
         self.assertContains(response, "你的观点")
+        self.assertContains(response, "第 1 / 1 个帖子")
         # New simplified slider structure
+        self.assertContains(response, 'class="scale-card"')
+        self.assertContains(response, 'class="scale-value-pill"')
+        self.assertContains(response, 'data-scale-value')
         self.assertContains(response, 'class="scale-slider"')
         self.assertContains(response, 'type="range"')
         self.assertContains(response, 'min="1"')
@@ -402,6 +457,21 @@ class SurveyViewTests(TestCase):
         self.assertNotContains(response, 'class="rating-readout"')
         self.assertNotContains(response, 'class="slider-track-fill"')
 
+    def test_emotion_step_keeps_current_post_context(self):
+        self.create_round_for_step("emotion", username="p_emotion_context")
+
+        response = self.client.get(reverse("survey:scale", args=["emotion"]))
+
+        self.assertContains(response, "当前感受")
+        self.assertContains(response, "第 3 站 · 第 1 / 1 个帖子")
+
+    def test_step_hero_styles_are_more_readable(self):
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn(".task-hero h1", stylesheet)
+        self.assertIn("font-size: clamp(24px, 3vw, 30px)", stylesheet)
+        self.assertIn(".task-hero .intro-text", stylesheet)
+        self.assertIn("font-size: 15px", stylesheet)
 
 
     def test_rating_script_prompts_gently_before_incomplete_submit(self):
@@ -417,6 +487,7 @@ class SurveyViewTests(TestCase):
         response = self.client.get(reverse("survey:text_response", args=["initial_text"]))
 
         self.assertContains(response, "写下你的想法")
+        self.assertContains(response, "第 1 / 1 个帖子")
         self.assertContains(response, "把你现在想到的写下来就好")
         self.assertContains(response, "保存想法")
         self.assertContains(response, 'data-no-paste="true"')
@@ -427,8 +498,10 @@ class SurveyViewTests(TestCase):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "recorder.js").read_text(encoding="utf-8")
 
         self.assertIn("function appendTranscription", script)
-        self.assertIn("textarea.value = current ? `${current}\\n${text}` : text", script)
+        self.assertIn("target.value = current ? `${current}\\n${text}` : text", script)
         self.assertNotIn("textarea.value = payload.text", script)
+        self.assertIn("data-recorder-target", script)
+        self.assertIn("正在转写", script)
 
     def test_mode_page_renders_mode_cards_with_skip_last(self):
         user, batch, session, round_obj = self.create_round_for_step("mode", username="p_mode")
@@ -440,7 +513,10 @@ class SurveyViewTests(TestCase):
         content = response.content.decode()
 
         self.assertContains(response, "选择对话模式")
+        self.assertContains(response, "第 1 / 1 个帖子")
         self.assertContains(response, 'class="mode-card"')
+        self.assertContains(response, 'class="mode-card-head"')
+        self.assertContains(response, 'class="mode-tag"')
         self.assertContains(response, 'class="mode-description"')
         self.assertContains(response, long_prompt)
         self.assertNotContains(response, "忽略的理由和反例…")
@@ -451,9 +527,55 @@ class SurveyViewTests(TestCase):
         stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
 
         self.assertIn(".mode-description", stylesheet)
+        self.assertIn(".mode-card-head", stylesheet)
+        self.assertIn(".mode-tag", stylesheet)
         self.assertIn("text-align: left", stylesheet)
         self.assertIn("white-space: normal", stylesheet)
         self.assertIn("overflow: visible", stylesheet)
+
+    def test_english_paper_step_appears_after_rounds_and_saves_response(self):
+        user, batch, session, round_obj = self.create_round_for_step("final_text", username="p_paper")
+        batch.english_paper_prompt = "Write an English argumentative essay about the discussion."
+        batch.english_paper_duration_hours = 24
+        batch.save(update_fields=["english_paper_prompt", "english_paper_duration_hours"])
+
+        response = self.client.post(reverse("survey:text_response", args=["final_text"]), {"final_text": "最终想法"})
+
+        self.assertRedirects(response, reverse("survey:english_paper"))
+        session.refresh_from_db()
+        self.assertEqual(session.current_session_step, SurveySession.STEP_ENGLISH_PAPER)
+
+        page = self.client.get(reverse("survey:english_paper"))
+        self.assertContains(page, "Write an English argumentative essay about the discussion.")
+        self.assertContains(page, "24 小时")
+        self.assertContains(page, "剩余时间")
+        self.assertContains(page, "暂时保存")
+        self.assertContains(page, 'data-paper-save-draft')
+        self.assertContains(page, 'data-paper-countdown')
+        match = re.search(r'data-remaining-seconds="(\d+)"', page.content.decode("utf-8"))
+        self.assertIsNotNone(match)
+        self.assertLessEqual(int(match.group(1)), 86400)
+        self.assertGreater(int(match.group(1)), 86000)
+        session.refresh_from_db()
+        self.assertIn(SurveySession.STEP_ENGLISH_PAPER, session.step_started_at)
+
+        submit = self.client.post(reverse("survey:english_paper"), {"paper_text": "This is my English essay."})
+
+        self.assertRedirects(submit, reverse("survey:done"))
+        self.assertEqual(EnglishPaperResponse.objects.get(session=session).paper_text, "This is my English essay.")
+
+    def test_english_paper_draft_can_be_saved_and_restored(self):
+        user, batch, session, round_obj = self.create_round_for_step("final_text", username="p_paper_draft")
+        self.client.post(reverse("survey:text_response", args=["final_text"]), {"final_text": "最终想法"})
+        session.refresh_from_db()
+
+        response = self.client.post(reverse("survey:english_paper_draft"), {"paper_text": "Saved draft"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ok"], True)
+        self.assertEqual(EnglishPaperDraft.objects.get(session=session).paper_text, "Saved draft")
+        page = self.client.get(reverse("survey:english_paper"))
+        self.assertContains(page, "Saved draft")
 
     def test_chat_page_renders_chinese_game_chat_ui(self):
         user, batch, session, round_obj = self.create_round_for_step("chat", username="p_chat")
@@ -465,6 +587,10 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, "与人工智能对话")
         self.assertContains(response, "剩余时间")
         self.assertContains(response, "完成这轮对话")
+        self.assertContains(response, "语音输入")
+        self.assertContains(response, 'class="chat-compose"')
+        self.assertContains(response, 'data-confirm-finish')
+        self.assertContains(response, 'class="finish-button"')
         self.assertContains(response, 'data-chat-status')
         self.assertContains(response, 'data-no-paste="true"')
 
@@ -530,6 +656,13 @@ class SurveyViewTests(TestCase):
         self.assertIn("node.innerHTML = renderMarkdown", script)
         self.assertIn("data-markdown-source", script)
 
+    def test_chat_script_confirms_before_finishing_round(self):
+        script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "chat.js").read_text(encoding="utf-8")
+
+        self.assertIn("data-confirm-finish", script)
+        self.assertIn("确认完成这轮对话吗", script)
+        self.assertIn("event.preventDefault()", script)
+
     def test_done_page_renders_completion_card_without_answers(self):
         user, batch = self.create_ready_user(username="p_done")
         SurveySession.objects.create(
@@ -548,6 +681,25 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, "你的每一次选择和回答都很重要")
         self.assertContains(response, "完成徽章")
         self.assertNotContains(response, "submitted_topic_order")
+
+    def test_done_page_reminds_missing_profile_information(self):
+        user, batch = self.create_ready_user(username="p_done_profile")
+        user.participant_profile.display_name = ""
+        user.participant_profile.save(update_fields=["display_name"])
+        SurveySession.objects.create(
+            user=user,
+            batch=batch,
+            current_session_step=SurveySession.STEP_DONE,
+            batch_snapshot={},
+            topic_order_snapshot=[],
+            submitted_topic_order=[1, 2, 3],
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("survey:done"))
+
+        self.assertContains(response, "补充个人信息")
+        self.assertContains(response, reverse("accounts:profile_edit"))
 
     def test_reaction_script_toggles_same_choice_back_to_none(self):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "reactions.js").read_text(encoding="utf-8")

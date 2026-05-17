@@ -4,7 +4,7 @@
 <section class="task-page task-page-mode">
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
-    <p class="step-label">{{ step_meta.label }}</p>
+    <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
     <h1>{{ step_meta.title }}</h1>
     <p class="intro-text">接下来可以选择一种方式和人工智能聊一聊，也可以跳过。</p>
   </div>
@@ -12,12 +12,18 @@
     {% csrf_token %}
     {% for mode in modes %}
       <button class="mode-card" name="selected_mode" value="{{ mode.pk }}" type="submit">
-        <strong>{{ mode.name_zh }}</strong>
+        <span class="mode-card-head">
+          <strong>{{ mode.name_zh }}</strong>
+          <span class="mode-tag">AI</span>
+        </span>
         <span class="mode-description">{{ mode.prompt_zh }}</span>
       </button>
     {% endfor %}
     <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit">
-      <strong>跳过</strong>
+      <span class="mode-card-head">
+        <strong>跳过</strong>
+        <span class="mode-tag">直接继续</span>
+      </span>
       <span class="mode-description">不使用人工智能，直接进入下一站。</span>
     </button>
   </form>

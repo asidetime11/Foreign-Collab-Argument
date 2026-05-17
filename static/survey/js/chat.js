@@ -183,6 +183,15 @@
   });
   log.scrollTop = log.scrollHeight;
 
+  if (finishForm && finishForm.hasAttribute("data-confirm-finish")) {
+    finishForm.addEventListener("submit", function (event) {
+      const confirmed = window.confirm("确认完成这轮对话吗？提交后不能继续本轮对话。");
+      if (!confirmed) {
+        event.preventDefault();
+      }
+    });
+  }
+
   function handleServerEvent(block, revealer, assistant) {
     if (!block.trim()) return false;
     const lines = block.split("\n");

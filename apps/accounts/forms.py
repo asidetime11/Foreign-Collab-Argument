@@ -14,6 +14,65 @@ class NicknameForm(forms.ModelForm):
 
 
 class ParticipantProfileForm(forms.ModelForm):
+    region = forms.ChoiceField(
+        label="地区",
+        choices=[
+            ("", "请选择地区"),
+            ("中国大陆", "中国大陆"),
+            ("港澳台", "港澳台"),
+            ("海外", "海外"),
+            ("其他", "其他"),
+        ],
+        required=False,
+    )
+    age_range = forms.ChoiceField(
+        label="年龄段",
+        choices=[
+            ("", "请选择年龄段"),
+            ("18岁以下", "18岁以下"),
+            ("18-24岁", "18-24岁"),
+            ("25-34岁", "25-34岁"),
+            ("35-44岁", "35-44岁"),
+            ("45岁及以上", "45岁及以上"),
+        ],
+        required=False,
+    )
+    gender = forms.ChoiceField(
+        label="性别",
+        choices=[
+            ("", "请选择性别"),
+            ("女", "女"),
+            ("男", "男"),
+            ("非二元/其他", "非二元/其他"),
+            ("不方便透露", "不方便透露"),
+        ],
+        required=False,
+    )
+    organization_type = forms.ChoiceField(
+        label="学校/单位类型",
+        choices=[
+            ("", "请选择类型"),
+            ("初中", "初中"),
+            ("高中", "高中"),
+            ("大学/学院", "大学/学院"),
+            ("企事业单位", "企事业单位"),
+            ("其他", "其他"),
+        ],
+        required=False,
+    )
+    education_or_work = forms.ChoiceField(
+        label="教育阶段/职业状态",
+        choices=[
+            ("", "请选择状态"),
+            ("在校学生", "在校学生"),
+            ("教师/教育工作者", "教师/教育工作者"),
+            ("在职", "在职"),
+            ("自由职业", "自由职业"),
+            ("其他", "其他"),
+        ],
+        required=False,
+    )
+
     class Meta:
         model = ParticipantProfile
         fields = [
@@ -26,6 +85,19 @@ class ParticipantProfileForm(forms.ModelForm):
             "contact",
             "notes",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["display_name"].required = True
+        self.fields["display_name"].label = "称呼/姓名"
+        self.fields["display_name"].help_text = "必填。可以填写昵称、称呼或姓名。"
+        self.fields["display_name"].widget.attrs.update({"placeholder": "例如：小林"})
+        self.fields["contact"].label = "联系方式"
+        self.fields["contact"].required = False
+        self.fields["contact"].widget.attrs.update({"placeholder": "选填，便于后续联系"})
+        self.fields["notes"].label = "备注"
+        self.fields["notes"].required = False
+        self.fields["notes"].widget.attrs.update({"placeholder": "选填，可以补充任何你想说明的信息", "rows": 5})
 
 
 class ParticipantRegistrationForm(UserCreationForm):

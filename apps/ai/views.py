@@ -1,13 +1,13 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponseBadRequest, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
 
-from apps.experiments.models import SystemAPIConfig
 from apps.survey.models import ConversationMessage, TopicRound
 
-from .clients import chat_stream, transcribe_audio
+from .clients import AI_CONFIGURATION_ERROR, chat_stream, configured_providers, transcribe_audio
 from .prompts import build_system_prompt
 
 
@@ -22,11 +22,26 @@ def _sse_message(data, event=None):
 
 def _friendly_chat_error(exc):
     message = str(exc)
+    if AI_CONFIGURATION_ERROR in message or isinstance(exc, ImproperlyConfigured):
+        return "AI 服务还没有在后台配置好，请联系管理员检查“模型和 API”。"
     if "429" in message or "api_limit" in message or "负载已饱和" in message:
         return "AI 服务现在比较拥挤，请稍后再试一次。"
     if "401" in message or "未提供令牌" in message or "Unauthorized" in message:
         return "AI 服务密钥没有正确配置，请联系管理员检查后台设置。"
+    if "model_not_found" in message or "不存在" in message:
+        return "当前模型名称不可用，请联系管理员在后台检查模型配置。"
     return "暂时没有收到稳定回复，请稍后再试一次。"
+
+
+def _chat_providers():
+    return configured_providers()
+
+
+def _provider_display_model(provider):
+    key = provider.api_keys.filter(is_active=True).order_by("usage_count", "id").first()
+    if key:
+        return key.default_model_name()
+    return provider.model_name
 
 
 @login_required
@@ -39,10 +54,8 @@ def chat(request, round_id):
     if not text:
         return HttpResponseBadRequest("message is required")
 
-    # 获取系统级API配置
-    system_config = SystemAPIConfig.get_instance()
-    provider = system_config.active_provider
-    model_name = provider.model_name if provider else settings.DEFAULT_CHAT_MODEL
+    providers = _chat_providers()
+    initial_model_name = _provider_display_model(providers[0]) if providers else ""
 
     ConversationMessage.objects.create(
         round=round_obj,
@@ -50,7 +63,7 @@ def chat(request, round_id):
         content=text,
         language=round_obj.session.language,
         ai_mode_name=round_obj.ai_mode.name_zh,
-        model_name=model_name,
+        model_name=initial_model_name,
     )
     prior_messages = [
         {"role": "system", "content": build_system_prompt(round_obj.session.batch, round_obj.ai_mode, round_obj.session.language)}
@@ -61,11 +74,20 @@ def chat(request, round_id):
             prior_messages.append({"role": role, "content": message.content})
 
     def event_stream():
-        chunks = []
-        try:
-            # 使用provider配置进行流式聊天
-            for chunk in chat_stream(prior_messages, provider=provider):
-                chunks.append(chunk)
+        errors = []
+        if not providers:
+            errors.append(ImproperlyConfigured(AI_CONFIGURATION_ERROR))
+
+        for provider in providers:
+            model_name = _provider_display_model(provider)
+            try:
+                chunks = list(chat_stream(prior_messages, provider=provider))
+            except Exception as exc:  # pragma: no cover - network failure path.
+                errors.append(exc)
+                continue
+
+            model_name = getattr(provider, "_last_model_name", model_name)
+            for chunk in chunks:
                 yield _sse_message(chunk)
             final = "".join(chunks)
             ConversationMessage.objects.create(
@@ -77,18 +99,20 @@ def chat(request, round_id):
                 model_name=model_name,
             )
             yield _sse_message("ok", event="done")
-        except Exception as exc:  # pragma: no cover - network failure path.
-            friendly_message = _friendly_chat_error(exc)
-            ConversationMessage.objects.create(
-                round=round_obj,
-                role="assistant",
-                content="",
-                language=round_obj.session.language,
-                ai_mode_name=round_obj.ai_mode.name_zh,
-                model_name=model_name,
-                error_message=str(exc),
-            )
-            yield _sse_message(friendly_message, event="error")
+            return
+
+        exc = errors[-1] if errors else ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+        friendly_message = _friendly_chat_error(exc)
+        ConversationMessage.objects.create(
+            round=round_obj,
+            role="assistant",
+            content="",
+            language=round_obj.session.language,
+            ai_mode_name=round_obj.ai_mode.name_zh,
+            model_name=initial_model_name,
+            error_message=str(exc),
+        )
+        yield _sse_message(friendly_message, event="error")
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
@@ -102,5 +126,8 @@ def transcribe(request):
     audio_file = request.FILES.get("audio")
     if not audio_file:
         return HttpResponseBadRequest("audio file is required")
-    text = transcribe_audio(audio_file, settings.DEFAULT_TRANSCRIBE_MODEL)
+    try:
+        text = transcribe_audio(audio_file, settings.DEFAULT_TRANSCRIBE_MODEL)
+    except ImproperlyConfigured as exc:
+        return JsonResponse({"error": _friendly_chat_error(exc)}, status=503)
     return JsonResponse({"text": text, "model": settings.DEFAULT_TRANSCRIBE_MODEL})

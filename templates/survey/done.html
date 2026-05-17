@@ -1,13 +1,20 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}已完成{% endblock %}
 {% block content %}
 <section class="task-page task-page-done">
   {% include "survey/partials/step_header.html" %}
   <div class="completion-card">
-    <div class="completion-badge" aria-label="完成徽章">完成徽章</div>
+    <img class="completion-medal" src="{% static 'medal.png' %}" alt="完成徽章">
     <h1>已完成，感谢你的参与</h1>
     <p>你的每一次选择和回答都很重要。感谢你认真完成这次研究任务。</p>
     {% if outro %}<p class="outro-text">{{ outro }}</p>{% endif %}
+    {% if not request.user.participant_profile.has_required_display_name %}
+      <div class="profile-reminder">
+        <p>最后提醒一下：如果方便，请补充个人信息，便于后续数据整理。</p>
+        <a class="button secondary" href="{% url 'accounts:profile_edit' %}">补充个人信息</a>
+      </div>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

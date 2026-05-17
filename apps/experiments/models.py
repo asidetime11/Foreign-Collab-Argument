@@ -15,6 +15,11 @@ class ExperimentBatch(models.Model):
     intro_en = models.TextField("第 1 步说明（英文）", blank=True)
     outro_zh = models.TextField("结束说明（中文）", blank=True)
     outro_en = models.TextField("结束说明（英文）", blank=True)
+    english_paper_prompt = models.TextField(
+        "英文论文要求",
+        default="Write an English argumentative essay based on the discussion you completed.",
+    )
+    english_paper_duration_hours = models.PositiveIntegerField("英文论文时长（小时）", default=24)
     topic_selection_strategy = models.CharField("话题选择策略", max_length=40, default=TOPIC_STRATEGY_HIGHEST_LOWEST)
     round_order_strategy = models.CharField("轮次顺序策略", max_length=40, default=ROUND_RANDOM)
     ai_neutrality = models.CharField("AI 中立性", max_length=40, default=NEUTRALITY_MODERATE)
@@ -201,6 +206,7 @@ class LLMProvider(models.Model):
     name = models.CharField("提供商名称", max_length=120, unique=True, help_text="例如: GPT-4, Claude, Qwen等")
     model_name = models.CharField("模型名称", max_length=200, help_text="调用API时使用的模型标识，例如: gpt-4, claude-3-opus")
     base_url = models.URLField("API Base URL", help_text="模型API的基础URL")
+    priority = models.PositiveIntegerField("调用顺序", default=0, help_text="数字越小越优先调用")
     is_active = models.BooleanField("启用", default=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
@@ -208,7 +214,7 @@ class LLMProvider(models.Model):
     class Meta:
         verbose_name = "LLM 提供商"
         verbose_name_plural = "LLM 提供商"
-        ordering = ['-is_active', 'name']
+        ordering = ["priority", "id"]
 
     def __str__(self):
         return f"{self.name} ({self.model_name})"
@@ -220,7 +226,7 @@ class LLMProvider(models.Model):
 
         with transaction.atomic():
             # 获取所有启用的key，按使用次数排序
-            keys = self.api_keys.filter(is_active=True).select_for_update().order_by('usage_count')
+            keys = self.api_keys.filter(is_active=True).select_for_update().order_by('usage_count', 'id')
 
             if not keys.exists():
                 raise ValueError(f"提供商 {self.name} 没有可用的API Key")
@@ -235,7 +241,7 @@ class LLMProvider(models.Model):
             # 刷新以获取实际的usage_count值
             selected_key.refresh_from_db()
 
-            return selected_key.api_key
+            return selected_key
 
 
 class APIKey(models.Model):
@@ -247,6 +253,7 @@ class APIKey(models.Model):
         verbose_name='LLM 提供商'
     )
     api_key = models.CharField("API Key", max_length=500)
+    model_name = models.TextField("支持模型", blank=True)
     name = models.CharField("Key名称", max_length=120, blank=True, help_text="便于识别的key名称，例如: key-1, key-2")
     usage_count = models.PositiveIntegerField("使用次数", default=0, help_text="记录该key被使用的次数，用于轮询分配")
     is_active = models.BooleanField("启用", default=True)
@@ -262,4 +269,19 @@ class APIKey(models.Model):
         key_preview = f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else self.api_key
         name_part = f" ({self.name})" if self.name else ""
         return f"{self.provider.name} - {key_preview}{name_part}"
+
+    def model_names(self):
+        normalized = (self.model_name or "").replace("，", ",").replace("；", ";").replace("\r\n", "\n")
+        parts = []
+        for line in normalized.replace(";", "\n").replace(",", "\n").split("\n"):
+            value = line.strip()
+            if value:
+                parts.append(value)
+        return parts
+
+    def default_model_name(self):
+        models = self.model_names()
+        if models:
+            return models[0]
+        return self.provider.model_name
 

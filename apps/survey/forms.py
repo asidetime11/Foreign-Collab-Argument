@@ -11,6 +11,12 @@ class TopicOrderForm(forms.Form):
 class CommentReactionForm(forms.Form):
     def __init__(self, comments, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["post_reaction"] = forms.ChoiceField(
+            choices=[("none", "无操作"), ("like", "赞"), ("dislike", "踩")],
+            required=False,
+            initial="none",
+            widget=forms.HiddenInput,
+        )
         for comment in comments:
             self.fields[f"comment_{comment['id']}"] = forms.ChoiceField(
                 choices=[("none", "无操作"), ("like", "赞"), ("dislike", "踩")],
@@ -37,6 +43,10 @@ class TextResponseForm(forms.Form):
     input_method = forms.CharField(widget=forms.HiddenInput, required=False, initial="keyboard")
     transcribe_model = forms.CharField(widget=forms.HiddenInput, required=False)
     was_edited = forms.BooleanField(required=False)
+
+
+class EnglishPaperForm(forms.Form):
+    paper_text = forms.CharField(label="英文论文", widget=forms.Textarea)
 
 
 class AIModeForm(forms.Form):

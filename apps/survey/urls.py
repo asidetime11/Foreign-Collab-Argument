@@ -13,6 +13,8 @@ urlpatterns = [
     path("text/<str:step>/", views.text_response, name="text_response"),
     path("mode/", views.mode_select, name="mode_select"),
     path("chat/", views.chat, name="chat"),
+    path("english-paper/", views.english_paper, name="english_paper"),
+    path("english-paper/draft/", views.english_paper_draft, name="english_paper_draft"),
     path("done/", views.done, name="done"),
     path("quality-event/", views.quality_event, name="quality_event"),
 ]
