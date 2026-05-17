@@ -164,6 +164,11 @@
         queue.push(text);
         start();
       },
+      cancel() {
+        if (timer) { window.clearInterval(timer); timer = null; }
+        pending = "";
+        queue.length = 0;
+      },
       finish() {
         return new Promise((resolve) => {
           const waiter = window.setInterval(() => {
@@ -235,10 +240,30 @@
     setStatus("正在整理回复...", true);
 
     const controller = new AbortController();
+    let interrupted = false;
+
+    function doInterrupt() {
+      if (interrupted) return;
+      interrupted = true;
+      controller.abort();
+      revealer.cancel();
+      const partial = assistant.dataset.markdownSource || assistant.textContent || "";
+      const tag = document.createElement("span");
+      tag.className = "chat-interrupted-tag";
+      tag.textContent = " 「已中断」";
+      assistant.appendChild(tag);
+      const interruptData = new FormData();
+      interruptData.append("partial_content", partial);
+      fetch("/ai/interrupt/" + panel.dataset.roundId + "/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken() },
+        body: interruptData,
+      }).catch(function () {});
+    }
 
     function onAbortClick(e) {
       e.preventDefault();
-      controller.abort();
+      doInterrupt();
     }
 
     if (send) {
@@ -272,19 +297,7 @@
       await revealer.finish();
     } catch (error) {
       if (error.name === "AbortError") {
-        await revealer.finish();
-        const partial = assistant.dataset.markdownSource || assistant.textContent || "";
-        const tag = document.createElement("span");
-        tag.className = "chat-interrupted-tag";
-        tag.textContent = " 「已中断」";
-        assistant.appendChild(tag);
-        const interruptData = new FormData();
-        interruptData.append("partial_content", partial);
-        fetch("/ai/interrupt/" + panel.dataset.roundId + "/", {
-          method: "POST",
-          headers: { "X-CSRFToken": csrfToken() },
-          body: interruptData,
-        }).catch(function () {});
+        // doInterrupt() already handled the UI and backend save
       } else {
         assistant.classList.add("error");
         revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
