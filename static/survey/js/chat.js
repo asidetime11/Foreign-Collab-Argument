@@ -230,17 +230,21 @@
     bubble(text, "participant");
     input.value = "";
     input.disabled = true;
-    if (send) send.disabled = true;
     const assistant = bubble("", "assistant", true);
     const revealer = createTextRevealer(assistant);
     setStatus("正在整理回复...", true);
 
     const controller = new AbortController();
-    let firstChunk = true;
 
     function onAbortClick(e) {
       e.preventDefault();
       controller.abort();
+    }
+
+    if (send) {
+      send.textContent = "中断";
+      send.disabled = false;
+      send.addEventListener("click", onAbortClick);
     }
 
     const data = new FormData();
@@ -262,14 +266,6 @@
         const blocks = buffer.split("\n\n");
         buffer = blocks.pop() || "";
         blocks.forEach((block) => handleServerEvent(block, revealer, assistant));
-        if (firstChunk) {
-          firstChunk = false;
-          if (send) {
-            send.textContent = "中断";
-            send.disabled = false;
-            send.addEventListener("click", onAbortClick);
-          }
-        }
         setStatus("AI 正在回复...", true);
       }
       if (buffer) handleServerEvent(buffer, revealer, assistant);
