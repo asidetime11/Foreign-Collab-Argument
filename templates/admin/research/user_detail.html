@@ -152,6 +152,11 @@
     font-size: 13px;
   }
 
+  .pill-warn {
+    background: #fff8e1;
+    color: #b45309;
+  }
+
   .score-badge {
     display: inline-flex;
     min-width: 42px;
@@ -359,6 +364,7 @@
                 <td class="answer-cell">{{ item.content|default:"-"|linebreaksbr }}</td>
                 <td>
                   {{ item.model_name|default:"-" }}
+                  {% if item.was_interrupted %}<br><span class="pill pill-warn">已中断</span>{% endif %}
                   {% if item.error_message %}<br><span class="muted">调用失败：{{ item.error_message|truncatechars:80 }}</span>{% endif %}
                 </td>
                 <td>{{ item.created_at|date:"Y年n月j日 H:i" }}</td>

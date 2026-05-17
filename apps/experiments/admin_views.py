@@ -369,6 +369,7 @@ def user_detail(request, user_id):
             "content": item.content,
             "model_name": item.model_name,
             "error_message": item.error_message,
+            "was_interrupted": item.was_interrupted,
             "created_at": item.created_at,
         }
         for item in conversation_messages
