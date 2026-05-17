@@ -164,6 +164,11 @@
         queue.push(text);
         start();
       },
+      cancel() {
+        if (timer) { window.clearInterval(timer); timer = null; }
+        pending = "";
+        queue.length = 0;
+      },
       finish() {
         return new Promise((resolve) => {
           const waiter = window.setInterval(() => {
@@ -230,10 +235,42 @@
     bubble(text, "participant");
     input.value = "";
     input.disabled = true;
-    if (send) send.disabled = true;
     const assistant = bubble("", "assistant", true);
     const revealer = createTextRevealer(assistant);
     setStatus("正在整理回复...", true);
+
+    const controller = new AbortController();
+    let interrupted = false;
+
+    function doInterrupt() {
+      if (interrupted) return;
+      interrupted = true;
+      controller.abort();
+      revealer.cancel();
+      const partial = assistant.dataset.markdownSource || assistant.textContent || "";
+      const tag = document.createElement("span");
+      tag.className = "chat-interrupted-tag";
+      tag.textContent = " 「已中断」";
+      assistant.appendChild(tag);
+      const interruptData = new FormData();
+      interruptData.append("partial_content", partial);
+      fetch("/ai/interrupt/" + panel.dataset.roundId + "/", {
+        method: "POST",
+        headers: { "X-CSRFToken": csrfToken() },
+        body: interruptData,
+      }).catch(function () {});
+    }
+
+    function onAbortClick(e) {
+      e.preventDefault();
+      doInterrupt();
+    }
+
+    if (send) {
+      send.textContent = "中断";
+      send.disabled = false;
+      send.addEventListener("click", onAbortClick);
+    }
 
     const data = new FormData();
     data.append("message", text);
@@ -241,7 +278,8 @@
       const response = await fetch("/ai/chat/" + panel.dataset.roundId + "/", {
         method: "POST",
         headers: { "X-CSRFToken": csrfToken() },
-        body: data
+        body: data,
+        signal: controller.signal,
       });
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -258,13 +296,21 @@
       if (buffer) handleServerEvent(buffer, revealer, assistant);
       await revealer.finish();
     } catch (error) {
-      assistant.classList.add("error");
-      revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
-      await revealer.finish();
+      if (error.name === "AbortError") {
+        // doInterrupt() already handled the UI and backend save
+      } else {
+        assistant.classList.add("error");
+        revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
+        await revealer.finish();
+      }
     } finally {
       setStatus("", false);
+      if (send) {
+        send.textContent = "发送";
+        send.disabled = false;
+        send.removeEventListener("click", onAbortClick);
+      }
       input.disabled = false;
-      if (send) send.disabled = false;
       input.focus();
     }
   });

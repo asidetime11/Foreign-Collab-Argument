@@ -1,9 +1,11 @@
+import asyncio
 import time
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 
 AI_CONFIGURATION_ERROR = "请先在后台的“模型和 API”页面配置 URL、API Key 和模型。"
@@ -99,3 +101,51 @@ def transcribe_audio(file_obj, model=None):
         file=file_obj,
     )
     return getattr(transcript, "text", "")
+
+
+async def _async_get_client_for_provider(provider):
+    if not provider.is_active:
+        raise ValueError(f"LLM provider {provider.name} is disabled.")
+
+    try:
+        api_key_config = await sync_to_async(provider.get_next_api_key)()
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"无法获取 API Key: {exc}") from exc
+
+    from apps.experiments.models import APIKey
+    await APIKey.objects.filter(pk=api_key_config.pk).aupdate(last_used_at=timezone.now())
+
+    model_name = api_key_config.default_model_name()
+    if not model_name:
+        raise ImproperlyConfigured("请在后台为 API Key 填写至少一个模型。")
+
+    client = AsyncOpenAI(api_key=api_key_config.api_key, base_url=provider.base_url)
+    provider._last_model_name = model_name
+    return client, model_name
+
+
+async def async_chat_stream(messages, provider):
+    """async 流式生成器。调用方负责 fallback：连接失败前不 yield，raise 给调用方处理。"""
+    attempts = 2
+    client, model_name = await _async_get_client_for_provider(provider)
+
+    stream = None
+    for attempt in range(attempts):
+        try:
+            stream = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                stream=True,
+            )
+            break
+        except Exception as exc:
+            if attempt == attempts - 1 or not _is_retryable_busy_error(exc):
+                raise
+            await asyncio.sleep(1)
+
+    async for chunk in stream:
+        if not getattr(chunk, "choices", None):
+            continue
+        delta = getattr(chunk.choices[0].delta, "content", "") or ""
+        if delta:
+            yield delta

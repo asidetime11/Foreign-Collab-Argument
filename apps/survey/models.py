@@ -125,6 +125,8 @@ class ConversationMessage(models.Model):
     ai_mode_name = models.CharField("AI 模式", max_length=120, blank=True)
     model_name = models.CharField("模型名称", max_length=120, blank=True)
     error_message = models.TextField("错误信息", blank=True)
+    was_interrupted = models.BooleanField("被用户中断", default=False)
+    interrupted_at = models.DateTimeField("中断时间", null=True, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
 
