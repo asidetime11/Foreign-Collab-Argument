@@ -277,6 +277,7 @@
     } catch (error) {
       if (error.name === "AbortError") {
         const partial = assistant.dataset.markdownSource || assistant.textContent || "";
+        await revealer.finish();
         const tag = document.createElement("span");
         tag.className = "chat-interrupted-tag";
         tag.textContent = " 「已中断」";
