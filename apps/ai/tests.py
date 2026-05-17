@@ -1,15 +1,42 @@
 from unittest.mock import patch
+import asyncio
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
-from apps.ai.clients import chat_stream, ensure_ai_configured, transcribe_audio
+from apps.ai.clients import async_chat_stream, chat_stream, ensure_ai_configured, transcribe_audio
 from apps.ai.prompts import build_system_prompt
 from apps.experiments.models import AIMode, APIKey, ExperimentBatch, LLMProvider
 from apps.survey.models import ConversationMessage, SurveySession, TopicRound
+
+
+def make_async_gen(*tokens):
+    """返回一个 async generator 函数，用于 mock async_chat_stream。"""
+    async def _gen(messages, provider=None, **kwargs):
+        for t in tokens:
+            yield t
+    return _gen
+
+
+def make_failing_gen(exc):
+    """返回一个在首次 __anext__ 时 raise 的 async generator 函数。"""
+    async def _gen(messages, provider=None, **kwargs):
+        raise exc
+        yield  # noqa: unreachable — makes this an async generator
+    return _gen
+
+
+def read_streaming(response):
+    """从 StreamingHttpResponse 读取全部内容，支持 async generator。"""
+    content = response.streaming_content
+    if hasattr(content, '__aiter__'):
+        async def collect():
+            return b"".join([chunk async for chunk in content])
+        return asyncio.run(collect())
+    return b"".join(content)
 
 
 class PromptTests(TestCase):
@@ -31,7 +58,7 @@ class PromptTests(TestCase):
         self.assertIn("Stay strictly neutral", prompt)
 
 
-class AIViewTests(TestCase):
+class AIViewTests(TransactionTestCase):
     def _round(self, username="participant", language="zh-hans"):
         user = User.objects.create_user(username, password="pass")
         batch = ExperimentBatch.objects.create(name=f"Batch {username}")
@@ -65,9 +92,9 @@ class AIViewTests(TestCase):
         self._provider()
         self.client.force_login(user)
 
-        with patch("apps.ai.views.chat_stream", return_value=iter(["你", "好"])):
+        with patch("apps.ai.views.async_chat_stream", new=make_async_gen("你", "好")):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            list(response.streaming_content)
+            read_streaming(response)
 
         self.assertEqual(ConversationMessage.objects.filter(round=round_obj, role="participant").count(), 1)
         self.assertEqual(ConversationMessage.objects.get(round=round_obj, role="assistant").content, "你好")
@@ -155,9 +182,9 @@ class AIViewTests(TestCase):
         self._provider()
         self.client.force_login(user)
 
-        with patch("apps.ai.views.chat_stream", side_effect=IndexError("list index out of range")):
+        with patch("apps.ai.views.async_chat_stream", new=make_failing_gen(IndexError("list index out of range"))):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertIn("暂时没有收到稳定回复", payload)
         self.assertNotIn("list index out of range", payload)
@@ -168,9 +195,9 @@ class AIViewTests(TestCase):
         self.client.force_login(user)
 
         error = Exception("Error code: 429 - {'error': {'message': '当前分组上游负载已饱和，请稍后再试', 'code': 'api_limit'}}")
-        with patch("apps.ai.views.chat_stream", side_effect=error):
+        with patch("apps.ai.views.async_chat_stream", new=make_failing_gen(error)):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertIn("AI 服务现在比较拥挤", payload)
         self.assertNotIn("api_limit", payload)
@@ -184,11 +211,14 @@ class AIViewTests(TestCase):
 
         def fake_chat_stream(messages, provider=None, **kwargs):
             captured_messages.extend(messages)
-            return iter(["好的"])
 
-        with patch("apps.ai.views.chat_stream", side_effect=fake_chat_stream):
+            async def _gen():
+                yield "好的"
+            return _gen()
+
+        with patch("apps.ai.views.async_chat_stream", side_effect=fake_chat_stream):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            b"".join(response.streaming_content)
+            read_streaming(response)
 
         self.assertNotIn({"role": "assistant", "content": ""}, captured_messages)
 
@@ -197,9 +227,9 @@ class AIViewTests(TestCase):
         self._provider()
         self.client.force_login(user)
 
-        with patch("apps.ai.views.chat_stream", return_value=iter(["**重点**\n- 第一条"])):
+        with patch("apps.ai.views.async_chat_stream", new=make_async_gen("**重点**\n- 第一条")):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertIn("data: **重点**\ndata: - 第一条\n\n", payload)
 
@@ -213,12 +243,19 @@ class AIViewTests(TestCase):
         def fake_chat_stream(messages, provider=None, **kwargs):
             attempted.append(provider.name)
             if provider == first:
-                raise Exception("Error code: 429 - {'error': {'code': 'api_limit'}}")
-            return iter(["稳定", "回复"])
+                async def _fail():
+                    raise Exception("Error code: 429 - {'error': {'code': 'api_limit'}}")
+                    yield  # noqa: unreachable
+                return _fail()
 
-        with patch("apps.ai.views.chat_stream", side_effect=fake_chat_stream):
+            async def _ok():
+                yield "稳定"
+                yield "回复"
+            return _ok()
+
+        with patch("apps.ai.views.async_chat_stream", side_effect=fake_chat_stream):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertEqual(attempted, ["first", "second"])
         self.assertIn("data: 稳定", payload)
@@ -231,9 +268,9 @@ class AIViewTests(TestCase):
         self._provider(name="broken", model="broken-model", key="broken-key")
         self.client.force_login(user)
 
-        with patch("apps.ai.views.chat_stream", side_effect=Exception("upstream exploded")):
+        with patch("apps.ai.views.async_chat_stream", new=make_failing_gen(Exception("upstream exploded"))):
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertIn("暂时没有收到稳定回复", payload)
         assistant = ConversationMessage.objects.get(round=round_obj, role="assistant")
@@ -244,9 +281,9 @@ class AIViewTests(TestCase):
         user, round_obj = self._round("p_no_provider")
         self.client.force_login(user)
 
-        with patch("apps.ai.views.chat_stream") as chat:
+        with patch("apps.ai.views.async_chat_stream") as chat:
             response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "你好"})
-            payload = b"".join(response.streaming_content).decode("utf-8")
+            payload = read_streaming(response).decode("utf-8")
 
         self.assertIn("AI 服务还没有在后台配置好", payload)
         chat.assert_not_called()
