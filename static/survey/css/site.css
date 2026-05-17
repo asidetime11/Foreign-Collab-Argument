@@ -1695,6 +1695,11 @@ p {
   display: none;
 }
 
+.chat-interrupted-tag {
+  color: #888;
+  font-style: italic;
+}
+
 .completion-card {
   max-width: 720px;
   margin: 0 auto;

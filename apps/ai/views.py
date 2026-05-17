@@ -87,7 +87,7 @@ async def chat(request, round_id):
             round_obj.session.language,
         )}
     ]
-    async for message in round_obj.conversation_messages.order_by("created_at"):
+    async for message in round_obj.conversation_messages.filter(was_interrupted=False).order_by("created_at"):
         role = "assistant" if message.role == "assistant" else "user"
         if message.role in {"assistant", "participant"} and message.content.strip():
             prior_messages.append({"role": role, "content": message.content})

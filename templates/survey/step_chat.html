@@ -15,7 +15,7 @@
     {% for message in chat_messages %}
       <article class="chat-message {{ message.role }}" data-chat-role="{{ message.role }}">
         <span class="chat-speaker">{% if message.role == "participant" %}你{% else %}AI{% endif %}</span>
-        <div class="bubble {{ message.role }}{% if message.error_message %} error{% endif %}"{% if message.role == "assistant" %} data-markdown-source{% endif %}>{% if message.error_message and not message.content %}暂时没有收到稳定回复，请稍后再试一次。{% else %}{{ message.content }}{% endif %}</div>
+        <div class="bubble {{ message.role }}{% if message.error_message %} error{% endif %}"{% if message.role == "assistant" %} data-markdown-source{% endif %}>{% if message.error_message and not message.content %}暂时没有收到稳定回复，请稍后再试一次。{% else %}{{ message.content }}{% if message.was_interrupted %}<span class="chat-interrupted-tag"> 「已中断」</span>{% endif %}{% endif %}</div>
       </article>
     {% endfor %}
   </div>
