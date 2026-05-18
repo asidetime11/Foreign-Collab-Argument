@@ -229,7 +229,7 @@ AI 接入 Dubrify OpenAI 兼容接口。
 - base URL：通过环境变量配置。
 - API key：通过环境变量配置。
 - 对话模型：deepseek-r1。
-- 转写模型：默认建议 gpt-4o-mini-transcribe，如果 Dubrify 不支持，可在配置中替换。
+- 转写模型：默认使用 whisper-1；如果代理后台支持其他转写模型，可在配置中替换。
 
 AI 模式后台可配置，默认提供三种：
 

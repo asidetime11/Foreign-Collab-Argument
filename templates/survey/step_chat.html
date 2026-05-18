@@ -25,13 +25,25 @@
       {% csrf_token %}
       <input name="message" autocomplete="off" data-no-paste="true" placeholder="直接输入你想聊的内容">
       <button type="button" class="ghost voice-button" data-recorder data-recorder-target='input[name="message"]'>语音输入</button>
+      <button type="button" class="ghost stop-reply-button" data-stop-reply hidden disabled>暂停回复</button>
       <button type="submit">发送</button>
     </form>
     <form method="post" class="chat-finish" data-confirm-finish>{% csrf_token %}<button class="finish-button" type="submit">完成这轮对话</button></form>
   </div>
+  <div class="finish-modal" data-finish-modal hidden>
+    <div class="finish-modal-backdrop" data-finish-cancel></div>
+    <section class="finish-modal-panel" role="dialog" aria-modal="true" aria-labelledby="finish-modal-title">
+      <h2 id="finish-modal-title">确认完成这轮对话吗？</h2>
+      <p>提交后将进入下一步，不能继续本轮 AI 对话。</p>
+      <div class="finish-modal-actions">
+        <button type="button" class="ghost" data-finish-cancel>取消</button>
+        <button type="button" class="primary" data-finish-confirm>确认完成</button>
+      </div>
+    </section>
+  </div>
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="{% static 'survey/js/recorder.js' %}"></script>
-<script src="{% static 'survey/js/chat.js' %}"></script>
+<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>
+<script src="{% static 'survey/js/chat.js' %}?v=20260518-1"></script>
 {% endblock %}

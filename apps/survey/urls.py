@@ -7,6 +7,7 @@ app_name = "survey"
 
 urlpatterns = [
     path("", views.start, name="start"),
+    path("consent/", views.consent, name="consent"),
     path("topic-order/", views.topic_order, name="topic_order"),
     path("post/", views.post, name="post"),
     path("scale/<str:step>/", views.scale, name="scale"),

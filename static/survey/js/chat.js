@@ -5,9 +5,16 @@
   if (!panel || !form || !log) return;
 
   const finishForm = document.querySelector(".chat-finish");
+  const finishModal = document.querySelector("[data-finish-modal]");
+  const finishConfirm = document.querySelector("[data-finish-confirm]");
+  const finishCancelButtons = document.querySelectorAll("[data-finish-cancel]");
   const countdown = document.querySelector("[data-countdown]");
   const status = document.querySelector("[data-chat-status]");
+  const stopReply = document.querySelector("[data-stop-reply]");
   let remaining = Number(panel.dataset.remainingSeconds || Number(panel.dataset.minutes || 0) * 60);
+  let allowFinishSubmit = false;
+  let activeController = null;
+  let activeInterrupt = null;
 
   function csrfToken() {
     const node = document.querySelector('meta[name="csrf-token"]');
@@ -24,6 +31,23 @@
     if (!status) return;
     status.textContent = text;
     status.hidden = !visible;
+  }
+
+  function setReplyActive(active) {
+    if (stopReply) {
+      stopReply.hidden = !active;
+      stopReply.disabled = !active;
+    }
+    const send = form.querySelector('button[type="submit"]');
+    if (send) send.disabled = active;
+  }
+
+  function stopActiveReply() {
+    if (activeInterrupt) {
+      activeInterrupt();
+      return;
+    }
+    if (activeController) activeController.abort();
   }
 
   function escapeHtml(text) {
@@ -126,58 +150,56 @@
   }
 
   function createTextRevealer(node) {
-    const queue = [];
-    let timer = null;
     let pending = "";
     let rawText = node.dataset.markdownSource || node.textContent || "";
+    let frame = null;
 
-    function appendText(text) {
-      rawText += text;
+    function flush() {
+      frame = null;
+      if (!pending) return;
+      rawText += pending;
+      pending = "";
       if (node.hasAttribute("data-markdown-source")) {
         applyMarkdown(node, rawText);
       } else {
         node.textContent = rawText;
       }
+      log.scrollTop = log.scrollHeight;
     }
 
-    function revealNext() {
-      if (!pending && queue.length) pending = queue.shift();
-      if (pending) {
-        const step = /[\u4e00-\u9fa5]/.test(pending[0]) ? 2 : 4;
-        appendText(pending.slice(0, step));
-        pending = pending.slice(step);
-        log.scrollTop = log.scrollHeight;
-      }
-      if (!pending && !queue.length && timer) {
-        window.clearInterval(timer);
-        timer = null;
-      }
-    }
-
-    function start() {
-      if (!timer) timer = window.setInterval(revealNext, 45);
+    function schedule() {
+      if (frame !== null) return;
+      const requestFrame = window.requestAnimationFrame || function (callback) {
+        return window.setTimeout(callback, 0);
+      };
+      frame = requestFrame(flush);
     }
 
     return {
       push(text) {
         if (!text) return;
-        queue.push(text);
-        start();
+        pending += text;
+        schedule();
       },
       cancel() {
-        if (timer) { window.clearInterval(timer); timer = null; }
+        if (frame !== null) {
+          const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+          cancelFrame(frame);
+          frame = null;
+        }
         pending = "";
-        queue.length = 0;
       },
       finish() {
         return new Promise((resolve) => {
-          const waiter = window.setInterval(() => {
-            if (!timer && !pending && !queue.length) {
-              window.clearInterval(waiter);
+          const wait = () => {
+            if (frame === null) {
+              if (pending) flush();
               resolve();
+              return;
             }
-          }, 45);
-          start();
+            window.setTimeout(wait, 0);
+          };
+          wait();
         });
       }
     };
@@ -188,12 +210,49 @@
   });
   log.scrollTop = log.scrollHeight;
 
-  if (finishForm && finishForm.hasAttribute("data-confirm-finish")) {
+  function openFinishModal() {
+    if (!finishModal) return;
+    finishModal.hidden = false;
+    document.body.classList.add("modal-open");
+    if (finishConfirm) finishConfirm.focus();
+  }
+
+  function closeFinishModal() {
+    if (!finishModal) return;
+    finishModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    const finishButton = finishForm ? finishForm.querySelector(".finish-button") : null;
+    if (finishButton) finishButton.focus();
+  }
+
+  if (finishForm && finishForm.hasAttribute("data-confirm-finish") && finishModal) {
     finishForm.addEventListener("submit", function (event) {
-      const confirmed = window.confirm("确认完成这轮对话吗？提交后不能继续本轮对话。");
-      if (!confirmed) {
+      if (!allowFinishSubmit) {
         event.preventDefault();
+        openFinishModal();
       }
+    });
+    if (finishConfirm) {
+      finishConfirm.addEventListener("click", function () {
+        allowFinishSubmit = true;
+        closeFinishModal();
+        finishForm.submit();
+      });
+    }
+    finishCancelButtons.forEach((button) => {
+      button.addEventListener("click", closeFinishModal);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !finishModal.hidden) closeFinishModal();
+    });
+  }
+
+  if (stopReply) {
+    stopReply.addEventListener("click", function () {
+      if (!activeController) return;
+      stopReply.disabled = true;
+      setStatus("正在暂停回复...", true);
+      stopActiveReply();
     });
   }
 
@@ -229,18 +288,22 @@
   form.addEventListener("submit", async function (event) {
     event.preventDefault();
     const input = form.querySelector("input[name=message]");
-    const send = form.querySelector('button[type="submit"]');
+    if (activeController) {
+      setStatus("AI 正在回复，输入可以先保留；需要停止请点暂停回复。", true);
+      input.focus();
+      return;
+    }
     const text = input.value.trim();
     if (!text) return;
     bubble(text, "participant");
     input.value = "";
-    input.disabled = true;
     const assistant = bubble("", "assistant", true);
     const revealer = createTextRevealer(assistant);
-    setStatus("正在整理回复...", true);
-
     const controller = new AbortController();
     let interrupted = false;
+    activeController = controller;
+    setReplyActive(true);
+    setStatus("正在整理回复...", true);
 
     function doInterrupt() {
       if (interrupted) return;
@@ -248,10 +311,13 @@
       controller.abort();
       revealer.cancel();
       const partial = assistant.dataset.markdownSource || assistant.textContent || "";
-      const tag = document.createElement("span");
-      tag.className = "chat-interrupted-tag";
-      tag.textContent = " 「已中断」";
-      assistant.appendChild(tag);
+      if (!assistant.querySelector(".chat-interrupted-tag")) {
+        const tag = document.createElement("span");
+        tag.className = "chat-interrupted-tag";
+        tag.textContent = " 「已中断」";
+        assistant.appendChild(tag);
+      }
+      setStatus("已暂停回复，可以继续输入。", true);
       const interruptData = new FormData();
       interruptData.append("partial_content", partial);
       fetch("/ai/interrupt/" + panel.dataset.roundId + "/", {
@@ -261,16 +327,7 @@
       }).catch(function () {});
     }
 
-    function onAbortClick(e) {
-      e.preventDefault();
-      doInterrupt();
-    }
-
-    if (send) {
-      send.textContent = "中断";
-      send.disabled = false;
-      send.addEventListener("click", onAbortClick);
-    }
+    activeInterrupt = doInterrupt;
 
     const data = new FormData();
     data.append("message", text);
@@ -279,7 +336,7 @@
         method: "POST",
         headers: { "X-CSRFToken": csrfToken() },
         body: data,
-        signal: controller.signal,
+        signal: controller.signal
       });
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -297,20 +354,22 @@
       await revealer.finish();
     } catch (error) {
       if (error.name === "AbortError") {
-        // doInterrupt() already handled the UI and backend save
+        if (!interrupted) {
+          interrupted = true;
+          setStatus("已暂停回复，可以继续输入。", true);
+        }
       } else {
         assistant.classList.add("error");
         revealer.push("暂时没有收到稳定回复，请稍后再试一次。");
-        await revealer.finish();
       }
+      await revealer.finish();
     } finally {
-      setStatus("", false);
-      if (send) {
-        send.textContent = "发送";
-        send.disabled = false;
-        send.removeEventListener("click", onAbortClick);
+      if (activeController === controller) activeController = null;
+      if (activeInterrupt === doInterrupt) activeInterrupt = null;
+      setReplyActive(false);
+      if (!interrupted && status && status.textContent !== "已暂停回复，可以继续输入。") {
+        setStatus("", false);
       }
-      input.disabled = false;
       input.focus();
     }
   });

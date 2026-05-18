@@ -12,8 +12,8 @@
     const currentItems = items();
     input.value = currentItems.map((item) => item.dataset.topicId).join(",");
     currentItems.forEach((item, index) => {
-      item.classList.toggle("is-first", index === 0);
-      item.classList.toggle("is-last", index === currentItems.length - 1);
+      const rank = item.querySelector("[data-topic-rank]");
+      if (rank) rank.textContent = String(index + 1);
     });
   }
 

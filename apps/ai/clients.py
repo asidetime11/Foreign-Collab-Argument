@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import time
 
 from asgiref.sync import sync_to_async
@@ -38,7 +39,15 @@ def _client():
     return client
 
 
-def _get_client_for_provider(provider=None):
+def _preview_api_key(value):
+    if not value:
+        return ""
+    if len(value) <= 12:
+        return value
+    return f"{value[:8]}...{value[-4:]}"
+
+
+def _get_client_for_provider(provider=None, model_name=None):
     if not provider:
         provider = _default_provider()
 
@@ -46,20 +55,43 @@ def _get_client_for_provider(provider=None):
         raise ValueError(f"LLM provider {provider.name} is disabled.")
 
     try:
-        api_key_config = provider.get_next_api_key()
+        api_key_config = provider.get_next_api_key(model_name=model_name)
     except ValueError as exc:
         raise ImproperlyConfigured(f"无法获取 API Key: {exc}") from exc
 
     api_key_config.last_used_at = timezone.now()
     api_key_config.save(update_fields=["last_used_at"])
 
-    model_name = api_key_config.default_model_name()
-    if not model_name:
+    selected_model_name = model_name or api_key_config.default_model_name()
+    if not selected_model_name:
         raise ImproperlyConfigured("请在后台为 API Key 填写至少一个模型。")
 
     client = OpenAI(api_key=api_key_config.api_key, base_url=provider.base_url)
-    provider._last_model_name = model_name
-    return client, model_name
+    provider._last_model_name = selected_model_name
+    provider._last_api_key_preview = _preview_api_key(api_key_config.api_key)
+    return client, selected_model_name
+
+
+def _get_client_for_model(model_name):
+    providers = configured_providers()
+    if not providers:
+        raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+
+    errors = []
+    for provider in providers:
+        try:
+            client, selected_model_name = _get_client_for_provider(provider, model_name=model_name)
+            return client, selected_model_name, provider
+        except ImproperlyConfigured as exc:
+            errors.append(str(exc))
+
+    detail = "；".join(errors)
+    raise ImproperlyConfigured(
+        f"转写模型 {model_name} 未在任何启用的 API Key 支持模型中配置。"
+        f"请到后台“模型和 API”页面，在对应 Key 的“支持模型”里添加 {model_name}，"
+        "或把 DEFAULT_TRANSCRIBE_MODEL 改成上游已支持的转写模型。"
+        f"{' ' + detail if detail else ''}"
+    )
 
 
 def _is_retryable_busy_error(exc):
@@ -95,12 +127,34 @@ def chat_stream(messages, model=None, provider=None):
 
 
 def transcribe_audio(file_obj, model=None):
-    client, _model_name = _get_client_for_provider(_default_provider())
-    transcript = client.audio.transcriptions.create(
-        model=model or settings.DEFAULT_TRANSCRIBE_MODEL,
-        file=file_obj,
+    model_name = model or settings.DEFAULT_TRANSCRIBE_MODEL
+    client, model_name, provider = _get_client_for_model(model_name)
+    if hasattr(file_obj, "seek"):
+        file_obj.seek(0)
+    audio_bytes = file_obj.read()
+    audio_hash = hashlib.sha256(audio_bytes).hexdigest()[:16]
+    upload_file = (
+        getattr(file_obj, "name", "recording.webm"),
+        audio_bytes,
+        getattr(file_obj, "content_type", "application/octet-stream"),
     )
-    return getattr(transcript, "text", "")
+    print(
+        (
+            "[transcribe] calling provider: "
+            f"provider={provider.name} base_url={provider.base_url} "
+            f"model={model_name} key={getattr(provider, '_last_api_key_preview', '')} "
+            f"audio_name={upload_file[0]} audio_bytes={len(audio_bytes)} "
+            f"audio_sha256_16={audio_hash} content_type={upload_file[2]}"
+        ),
+        flush=True,
+    )
+    transcript = client.audio.transcriptions.create(
+        model=model_name,
+        file=upload_file,
+    )
+    text = getattr(transcript, "text", "")
+    print(f"[transcribe] provider returned text: {text!r}", flush=True)
+    return text
 
 
 async def _async_get_client_for_provider(provider):
@@ -113,6 +167,7 @@ async def _async_get_client_for_provider(provider):
         raise ImproperlyConfigured(f"无法获取 API Key: {exc}") from exc
 
     from apps.experiments.models import APIKey
+
     await APIKey.objects.filter(pk=api_key_config.pk).aupdate(last_used_at=timezone.now())
 
     model_name = api_key_config.default_model_name()
@@ -121,11 +176,11 @@ async def _async_get_client_for_provider(provider):
 
     client = AsyncOpenAI(api_key=api_key_config.api_key, base_url=provider.base_url)
     provider._last_model_name = model_name
+    provider._last_api_key_preview = _preview_api_key(api_key_config.api_key)
     return client, model_name
 
 
 async def async_chat_stream(messages, provider):
-    """async 流式生成器。调用方负责 fallback：连接失败前不 yield，raise 给调用方处理。"""
     attempts = 2
     client, model_name = await _async_get_client_for_provider(provider)
 

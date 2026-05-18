@@ -1,5 +1,5 @@
-from unittest.mock import patch
 import asyncio
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
@@ -7,34 +7,34 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
-from apps.ai.clients import async_chat_stream, chat_stream, ensure_ai_configured, transcribe_audio
+from apps.ai.clients import chat_stream, ensure_ai_configured, transcribe_audio
 from apps.ai.prompts import build_system_prompt
 from apps.experiments.models import AIMode, APIKey, ExperimentBatch, LLMProvider
 from apps.survey.models import ConversationMessage, SurveySession, TopicRound
 
 
 def make_async_gen(*tokens):
-    """返回一个 async generator 函数，用于 mock async_chat_stream。"""
     async def _gen(messages, provider=None, **kwargs):
-        for t in tokens:
-            yield t
+        for token in tokens:
+            yield token
+
     return _gen
 
 
 def make_failing_gen(exc):
-    """返回一个在首次 __anext__ 时 raise 的 async generator 函数。"""
     async def _gen(messages, provider=None, **kwargs):
         raise exc
-        yield  # noqa: unreachable — makes this an async generator
+        yield  # noqa: unreachable
+
     return _gen
 
 
 def read_streaming(response):
-    """从 StreamingHttpResponse 读取全部内容，支持 async generator。"""
     content = response.streaming_content
-    if hasattr(content, '__aiter__'):
+    if hasattr(content, "__aiter__"):
         async def collect():
             return b"".join([chunk async for chunk in content])
+
         return asyncio.run(collect())
     return b"".join(content)
 
@@ -214,6 +214,7 @@ class AIViewTests(TransactionTestCase):
 
             async def _gen():
                 yield "好的"
+
             return _gen()
 
         with patch("apps.ai.views.async_chat_stream", side_effect=fake_chat_stream):
@@ -246,11 +247,13 @@ class AIViewTests(TransactionTestCase):
                 async def _fail():
                     raise Exception("Error code: 429 - {'error': {'code': 'api_limit'}}")
                     yield  # noqa: unreachable
+
                 return _fail()
 
             async def _ok():
                 yield "稳定"
                 yield "回复"
+
             return _ok()
 
         with patch("apps.ai.views.async_chat_stream", side_effect=fake_chat_stream):
@@ -277,6 +280,28 @@ class AIViewTests(TransactionTestCase):
         self.assertEqual(assistant.content, "")
         self.assertIn("upstream exploded", assistant.error_message)
 
+    def test_chat_preserves_partial_assistant_message_when_stream_fails_after_output(self):
+        user, round_obj = self._round("p_partial_fail")
+        self._provider(name="partial-fail", model="partial-model", key="partial-key")
+        self.client.force_login(user)
+
+        def fake_chat_stream(messages, provider=None, **kwargs):
+            async def _gen():
+                yield "partial answer"
+                raise Exception("stream exploded after partial output")
+
+            return _gen()
+
+        with patch("apps.ai.views.async_chat_stream", side_effect=fake_chat_stream):
+            response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "hello"})
+            payload = read_streaming(response).decode("utf-8")
+
+        self.assertIn("data: partial answer", payload)
+        self.assertIn("event: error", payload)
+        assistant = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(assistant.content, "partial answer")
+        self.assertIn("stream exploded after partial output", assistant.error_message)
+
     def test_chat_reports_backend_configuration_error_without_env_fallback(self):
         user, round_obj = self._round("p_no_provider")
         self.client.force_login(user)
@@ -290,7 +315,7 @@ class AIViewTests(TransactionTestCase):
 
     @patch("apps.ai.clients.OpenAI")
     def test_transcribe_audio_uses_backend_provider_credentials(self, openai_cls):
-        self._provider(name="voice", model="chat-model", key="voice-key")
+        self._provider(name="voice", model="chat-model", key="voice-key", key_models="chat-model\ngpt-4o-mini-transcribe")
         openai_cls.return_value.audio.transcriptions.create.return_value.text = "语音转写结果"
         audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
 
@@ -300,8 +325,44 @@ class AIViewTests(TransactionTestCase):
         openai_cls.assert_called_once_with(api_key="voice-key", base_url="https://voice.example/v1")
         openai_cls.return_value.audio.transcriptions.create.assert_called_once_with(
             model="gpt-4o-mini-transcribe",
-            file=audio_file,
+            file=("voice.webm", b"audio-bytes", "audio/webm"),
         )
+
+    @patch("apps.ai.clients.OpenAI")
+    def test_transcribe_audio_requires_key_that_supports_transcribe_model(self, openai_cls):
+        self._provider(name="voice", model="gpt-5", key="voice-key", key_models="gpt-5")
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with self.assertRaisesMessage(ImproperlyConfigured, "whisper-1"):
+            transcribe_audio(audio_file, "whisper-1")
+
+        openai_cls.assert_not_called()
+
+    @patch("apps.ai.clients.OpenAI")
+    def test_transcribe_audio_uses_key_that_supports_transcribe_model(self, openai_cls):
+        provider = LLMProvider.objects.create(
+            name="voice",
+            model_name="gpt-5",
+            base_url="https://voice.example/v1",
+            priority=1,
+        )
+        chat_only_key = APIKey.objects.create(provider=provider, api_key="chat-key", model_name="gpt-5", usage_count=0)
+        voice_key = APIKey.objects.create(provider=provider, api_key="voice-key", model_name="gpt-5\nwhisper-1", usage_count=5)
+        openai_cls.return_value.audio.transcriptions.create.return_value.text = "语音转写结果"
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        text = transcribe_audio(audio_file, "whisper-1")
+
+        self.assertEqual(text, "语音转写结果")
+        openai_cls.assert_called_once_with(api_key="voice-key", base_url="https://voice.example/v1")
+        openai_cls.return_value.audio.transcriptions.create.assert_called_once_with(
+            model="whisper-1",
+            file=("voice.webm", b"audio-bytes", "audio/webm"),
+        )
+        chat_only_key.refresh_from_db()
+        voice_key.refresh_from_db()
+        self.assertEqual(chat_only_key.usage_count, 0)
+        self.assertEqual(voice_key.usage_count, 6)
 
     def test_transcribe_endpoint_returns_text_and_model(self):
         user = User.objects.create_user("p_voice", password="pass")
@@ -313,8 +374,48 @@ class AIViewTests(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["text"], "这是转写文字")
-        self.assertEqual(response.json()["model"], "gpt-4o-mini-transcribe")
+        self.assertEqual(response.json()["model"], "whisper-1")
         transcribe.assert_called_once()
+
+    def test_transcribe_endpoint_returns_json_error_when_provider_call_fails(self):
+        user = User.objects.create_user("p_voice_error", password="pass")
+        self.client.force_login(user)
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with patch("apps.ai.views.transcribe_audio", side_effect=Exception("model_not_found: whisper-1")):
+            response = self.client.post(reverse("ai:transcribe"), {"audio": audio_file})
+
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("语音转写失败", response.json()["error"])
+        self.assertIn("model_not_found", response.json()["detail"])
+
+    def test_transcribe_endpoint_prints_provider_error_to_terminal(self):
+        user = User.objects.create_user("p_voice_print_error", password="pass")
+        self.client.force_login(user)
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with (
+            patch("apps.ai.views.transcribe_audio", side_effect=Exception("unsupported endpoint")),
+            patch("builtins.print") as print_mock,
+        ):
+            self.client.post(reverse("ai:transcribe"), {"audio": audio_file})
+
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("[transcribe] provider error: unsupported endpoint", printed)
+
+    def test_transcribe_debug_endpoint_prints_frontend_event_to_terminal(self):
+        user = User.objects.create_user("p_voice_debug", password="pass")
+        self.client.force_login(user)
+
+        with patch("builtins.print") as print_mock:
+            response = self.client.post(
+                reverse("ai:transcribe_debug"),
+                {"event": "upload-start", "detail": "chunks=1 bytes=123"},
+            )
+
+        self.assertEqual(response.status_code, 204)
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("[recorder] upload-start: chunks=1 bytes=123", printed)
 
 
 class InterruptChatTests(TransactionTestCase):

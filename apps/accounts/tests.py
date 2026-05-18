@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
@@ -160,6 +161,13 @@ class ParticipantProfileTests(TestCase):
         self.assertContains(response, "返回")
         self.assertContains(response, "<select", count=5)
         self.assertContains(response, "profile-card")
+
+    def test_profile_selects_align_with_text_inputs(self):
+        stylesheet = (settings.BASE_DIR / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn(".profile-form select", stylesheet)
+        self.assertIn(".profile-form select {\n  height: 44px;\n  min-height: 44px;\n  box-sizing: border-box;", stylesheet)
+        self.assertIn(".profile-form .form-field {\n  grid-template-rows: 22px 44px auto;", stylesheet)
 
     def test_first_name_page_redirects_to_full_profile_page(self):
         user = User.objects.create_user("p_first_name", password="pass")
