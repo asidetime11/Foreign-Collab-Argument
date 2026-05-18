@@ -94,6 +94,10 @@ def _step_label(step):
     return ROUND_STEP_LABELS.get(step, step)
 
 
+def _snapshot_topic_title(snapshot):
+    return snapshot.get("title_zh") or snapshot.get("title_en") or f"话题 #{snapshot.get('id')}"
+
+
 class PageCopyForm(forms.ModelForm):
     class Meta:
         model = ExperimentBatch
@@ -315,6 +319,7 @@ def user_detail(request, user_id):
     comment_reactions = CommentReaction.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id")
     scale_rows = [
         {
+            "round_id": item.round_id,
             "round_label": _round_label(item.round),
             "topic_title": _round_topic_title(item.round, topic_titles),
             "step_label": _step_label(item.step),
@@ -328,12 +333,12 @@ def user_detail(request, user_id):
     ]
     text_rows = [
         {
+            "round_id": item.round_id,
             "round_label": _round_label(item.round),
             "topic_title": _round_topic_title(item.round, topic_titles),
             "step_label": _step_label(item.step),
             "step_hint": ROUND_STEP_HINTS.get(item.step, ""),
             "word_count": item.word_count,
-            "input_method": INPUT_METHOD_LABELS.get(item.input_method, item.input_method),
             "was_edited": item.was_edited,
             "content": item.final_text,
             "submitted_at": item.submitted_at,
@@ -342,6 +347,7 @@ def user_detail(request, user_id):
     ]
     interaction_rows = [
         {
+            "round_id": item.round_id,
             "type": "帖子",
             "round_label": _round_label(item.round),
             "topic_title": _round_topic_title(item.round, topic_titles),
@@ -352,6 +358,7 @@ def user_detail(request, user_id):
         for item in post_reactions
     ] + [
         {
+            "round_id": item.round_id,
             "type": "评论",
             "round_label": _round_label(item.round),
             "topic_title": _round_topic_title(item.round, topic_titles),
@@ -363,6 +370,7 @@ def user_detail(request, user_id):
     ]
     conversation_rows = [
         {
+            "round_id": item.round_id,
             "round_label": _round_label(item.round),
             "topic_title": _round_topic_title(item.round, topic_titles),
             "role": ROLE_LABELS.get(item.role, item.get_role_display()),
@@ -373,6 +381,40 @@ def user_detail(request, user_id):
         }
         for item in conversation_messages
     ]
+    snapshot_by_id = {}
+    if session:
+        snapshot_by_id = {int(item.get("id")): item for item in session.topic_order_snapshot if item.get("id") is not None}
+    topic_order_rows = []
+    if session:
+        for index, topic_id in enumerate(session.submitted_topic_order or [], start=1):
+            topic_id = int(topic_id)
+            snapshot = snapshot_by_id.get(topic_id, {"id": topic_id})
+            marker = ""
+            if topic_id == session.selected_high_topic_id:
+                marker = "高分话题"
+            elif topic_id == session.selected_low_topic_id:
+                marker = "低分话题"
+            topic_order_rows.append(
+                {
+                    "rank": index,
+                    "title": _snapshot_topic_title(snapshot),
+                    "marker": marker,
+                }
+            )
+    round_order = {"high": 0, "low": 1}
+    ordered_rounds = sorted(rounds, key=lambda round_obj: (round_order.get(round_obj.round_type, 99), round_obj.pk))
+    round_sections = [
+        {
+            "round": round_obj,
+            "label": _round_label(round_obj),
+            "topic_title": _round_topic_title(round_obj, topic_titles),
+            "scale_rows": [row for row in scale_rows if row["round_id"] == round_obj.pk],
+            "text_rows": [row for row in text_rows if row["round_id"] == round_obj.pk],
+            "interaction_rows": [row for row in interaction_rows if row["round_id"] == round_obj.pk],
+            "conversation_rows": [row for row in conversation_rows if row["round_id"] == round_obj.pk],
+        }
+        for round_obj in ordered_rounds
+    ]
     context = {
         "title": f"用户数据 - {profile.user.username}",
         "profile": profile,
@@ -380,6 +422,8 @@ def user_detail(request, user_id):
         "rounds": rounds,
         "current_step_label": SESSION_STEP_LABELS.get(session.current_session_step, session.current_session_step) if session else "-",
         "paper_countdown": english_paper_countdown(session),
+        "topic_order_rows": topic_order_rows,
+        "round_sections": round_sections,
         "scale_rows": scale_rows,
         "text_rows": text_rows,
         "interaction_rows": interaction_rows,

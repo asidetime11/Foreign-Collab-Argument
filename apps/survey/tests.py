@@ -42,7 +42,7 @@ class SurveyStateTests(TestCase):
         session = get_or_create_session(self.user)
 
         self.assertEqual(len(session.topic_order_snapshot), 3)
-        self.assertEqual(current_step(session), "topic_order")
+        self.assertEqual(current_step(session), "consent")
 
     def test_existing_session_language_is_kept_in_chinese(self):
         SurveySession.objects.create(
@@ -59,6 +59,8 @@ class SurveyStateTests(TestCase):
 
     def test_topic_order_selects_high_low_and_locks_step(self):
         session = get_or_create_session(self.user)
+        session.step_submitted_at["research_consent"] = timezone.now().isoformat()
+        session.save(update_fields=["step_submitted_at"])
         ids = [item["id"] for item in session.topic_order_snapshot]
 
         submit_topic_order(session, ids)
@@ -80,6 +82,12 @@ class SurveyViewTests(TestCase):
         user.participant_profile.batch = batch
         user.participant_profile.save()
         return user, batch
+
+    def accept_research_consent(self, user):
+        session = get_or_create_session(user)
+        session.step_submitted_at["research_consent"] = timezone.now().isoformat()
+        session.save(update_fields=["step_submitted_at"])
+        return session
 
     def create_round_for_step(self, step, username="participant"):
         user, batch = self.create_ready_user(username=username)
@@ -130,7 +138,32 @@ class SurveyViewTests(TestCase):
 
         response = self.client.get(reverse("survey:start"))
 
-        self.assertRedirects(response, reverse("survey:topic_order"))
+        self.assertRedirects(response, reverse("survey:consent"))
+
+    def test_research_consent_page_blocks_topic_order_until_accepted(self):
+        user, batch = self.create_ready_user(username="p_consent")
+        for index in range(2):
+            Topic.objects.create(batch=batch, title_zh=f"话题 {index}", title_en=f"Topic {index}", position=index)
+        self.client.force_login(user)
+
+        blocked = self.client.get(reverse("survey:topic_order"))
+
+        self.assertRedirects(blocked, reverse("survey:consent"))
+
+        page = self.client.get(reverse("survey:consent"))
+        self.assertContains(page, "参与研究授权同意书")
+        self.assertContains(page, "我已阅读并同意")
+        self.assertContains(page, 'name="agree"')
+        self.assertContains(page, 'class="consent-body"')
+        self.assertContains(page, 'class="consent-checkmark"')
+        self.assertContains(page, 'class="consent-submit-row"')
+        self.assertNotContains(page, "匿名整理")
+
+        accepted = self.client.post(reverse("survey:consent"), {"agree": "on"})
+        self.assertRedirects(accepted, reverse("survey:topic_order"))
+
+        session = get_or_create_session(user)
+        self.assertIn("research_consent", session.step_submitted_at)
 
     def test_missing_batch_shows_message(self):
         user = User.objects.create_user("p003", password="pass")
@@ -176,6 +209,7 @@ class SurveyViewTests(TestCase):
         batch.save(update_fields=["intro_zh"])
         for index in range(10):
             Topic.objects.create(batch=batch, title_zh=f"话题 {index + 1}", position=index)
+        self.accept_research_consent(user)
         self.client.force_login(user)
 
         response = self.client.get(reverse("survey:topic_order"))
@@ -202,6 +236,7 @@ class SurveyViewTests(TestCase):
         batch.intro_zh = "管理员刚刚修改的小字说明"
         batch.save(update_fields=["intro_zh"])
         self.client.force_login(user)
+        self.accept_research_consent(user)
 
         response = self.client.get(reverse("survey:topic_order"))
 
@@ -212,22 +247,27 @@ class SurveyViewTests(TestCase):
         user, batch = self.create_ready_user(username="p_sort")
         for index in range(10):
             Topic.objects.create(batch=batch, title_zh=f"话题 {index + 1}", position=index)
+        self.accept_research_consent(user)
         self.client.force_login(user)
 
         response = self.client.get(reverse("survey:topic_order"))
 
         self.assertContains(response, 'class="topic-card"', count=10)
         self.assertContains(response, 'class="drag-handle"', count=10)
+        self.assertContains(response, 'class="topic-rank"', count=10)
+        self.assertContains(response, 'data-topic-rank', count=10)
         self.assertContains(response, 'class="topic-content"', count=10)
         self.assertNotContains(response, 'class="topic-number"')
         self.assertContains(response, 'data-move="up"')
         self.assertContains(response, 'data-move="down"')
         self.assertContains(response, 'name="ordered_topic_ids"')
+        self.assertContains(response, "survey/js/topic-order.js?v=20260518-2")
 
     def test_topic_order_dragging_has_clear_feedback_and_autoscroll(self):
         user, batch = self.create_ready_user(username="p_sort_drag")
         for index in range(10):
             Topic.objects.create(batch=batch, title_zh=f"话题 {index + 1}", position=index)
+        self.accept_research_consent(user)
         self.client.force_login(user)
 
         response = self.client.get(reverse("survey:topic_order"))
@@ -239,6 +279,7 @@ class SurveyViewTests(TestCase):
         self.assertIn('event.target.closest("[data-topic-id]")', script)
         self.assertIn('event.target.closest("button, a, input, textarea, select")', script)
         self.assertIn("function updateAutoScroll", script)
+        self.assertIn("rank.textContent = String(index + 1)", script)
         self.assertIn("window.scrollBy", script)
         self.assertIn("pointerdown", script)
         self.assertIn("pointermove", script)
@@ -250,10 +291,15 @@ class SurveyViewTests(TestCase):
         self.assertIn("dragging-active", script)
         self.assertIn("drag-over", script)
         self.assertIn(".topic-list.dragging-active", stylesheet)
+        self.assertIn(".task-page-sort .topic-list", stylesheet)
+        self.assertIn(".topic-rank", stylesheet)
+        self.assertIn("position: static", stylesheet)
         self.assertIn("color: var(--color-primary)", stylesheet)
         self.assertIn("box-shadow:", stylesheet)
         self.assertIn(".topic-card.drag-over", stylesheet)
         self.assertIn("cubic-bezier(0.2, 0, 0, 1)", stylesheet)
+        self.assertNotIn("@keyframes hintBounce", stylesheet)
+        self.assertNotIn(".topic-card:first-child", stylesheet)
 
     def test_post_page_renders_optional_like_dislike_controls(self):
         self.create_round_for_step("post", username="p_post")
@@ -472,6 +518,11 @@ class SurveyViewTests(TestCase):
         self.assertIn("font-size: clamp(24px, 3vw, 30px)", stylesheet)
         self.assertIn(".task-hero .intro-text", stylesheet)
         self.assertIn("font-size: 15px", stylesheet)
+        self.assertIn("max-width: 72ch", stylesheet)
+        self.assertIn("margin-top: 14px", stylesheet)
+        self.assertIn("line-height: 1.8", stylesheet)
+        self.assertIn(".completion-card p", stylesheet)
+        self.assertIn("margin: 14px auto 0", stylesheet)
 
 
     def test_rating_script_prompts_gently_before_incomplete_submit(self):
@@ -485,6 +536,7 @@ class SurveyViewTests(TestCase):
         self.create_round_for_step("initial_text", username="p_text")
 
         response = self.client.get(reverse("survey:text_response", args=["initial_text"]))
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
 
         self.assertContains(response, "写下你的想法")
         self.assertContains(response, "第 1 / 1 个帖子")
@@ -493,15 +545,35 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, 'data-no-paste="true"')
         self.assertNotContains(response, "我编辑过转写文本")
         self.assertNotContains(response, 'name="was_edited"')
+        self.assertIn("min-height: 480px", stylesheet)
+        self.assertIn(".task-page-english-paper .thought-note textarea", stylesheet)
+        self.assertIn("min-height: 560px", stylesheet)
 
     def test_recorder_appends_transcription_after_existing_text(self):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "recorder.js").read_text(encoding="utf-8")
 
         self.assertIn("function appendTranscription", script)
-        self.assertIn("target.value = current ? `${current}\\n${text}` : text", script)
+        self.assertIn('const separator = current && !/\\s$/.test(current) ? " " : ""', script)
+        self.assertIn("target.value = current ? `${current}${separator}${text}` : text", script)
+        self.assertNotIn("`${current}\\n${text}`", script)
         self.assertNotIn("textarea.value = payload.text", script)
         self.assertIn("data-recorder-target", script)
         self.assertIn("正在转写", script)
+        self.assertNotIn("正在上传录音并转写", script)
+        self.assertIn("markUnsupported", script)
+        self.assertIn("浏览器不支持录音", script)
+
+    def test_recorder_logs_transcription_errors_without_visible_status(self):
+        script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "recorder.js").read_text(encoding="utf-8")
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertNotIn("data-recorder-status", script)
+        self.assertNotIn("function showStatus", script)
+        self.assertNotIn("status.textContent = message", script)
+        self.assertIn('console.error(`[recorder] 语音转写失败：${message}`)', script)
+        self.assertIn('report("upload-error", message)', script)
+        self.assertNotIn("button.title = error.message", script)
+        self.assertNotIn(".recorder-status", stylesheet)
 
     def test_mode_page_renders_mode_cards_with_skip_last(self):
         user, batch, session, round_obj = self.create_round_for_step("mode", username="p_mode")
@@ -546,12 +618,18 @@ class SurveyViewTests(TestCase):
         self.assertEqual(session.current_session_step, SurveySession.STEP_ENGLISH_PAPER)
 
         page = self.client.get(reverse("survey:english_paper"))
-        self.assertContains(page, "Write an English argumentative essay about the discussion.")
+        self.assertNotContains(page, "English paper requirements")
+        self.assertNotContains(page, "Write an English argumentative essay about the discussion.")
         self.assertContains(page, "24 小时")
         self.assertContains(page, "剩余时间")
-        self.assertContains(page, "暂时保存")
+        self.assertContains(page, "暂存想法")
+        self.assertContains(page, "保存想法")
+        self.assertNotContains(page, "暂时保存")
+        self.assertNotContains(page, "提交英文论文")
         self.assertContains(page, 'data-paper-save-draft')
         self.assertContains(page, 'data-paper-countdown')
+        self.assertContains(page, 'data-deadline-at')
+        self.assertIn("no-store", page.headers.get("Cache-Control", ""))
         match = re.search(r'data-remaining-seconds="(\d+)"', page.content.decode("utf-8"))
         self.assertIsNotNone(match)
         self.assertLessEqual(int(match.group(1)), 86400)
@@ -563,6 +641,56 @@ class SurveyViewTests(TestCase):
 
         self.assertRedirects(submit, reverse("survey:done"))
         self.assertEqual(EnglishPaperResponse.objects.get(session=session).paper_text, "This is my English essay.")
+
+    def test_english_paper_countdown_starts_before_page_visit_and_ignores_profile_visit(self):
+        user, batch, session, round_obj = self.create_round_for_step("final_text", username="p_paper_profile_timer")
+
+        self.client.post(reverse("survey:text_response", args=["final_text"]), {"final_text": "最终想法"})
+        session.refresh_from_db()
+        started_at = session.step_started_at.get(SurveySession.STEP_ENGLISH_PAPER)
+
+        self.assertIsNotNone(started_at)
+
+        self.client.get(reverse("accounts:profile_edit"))
+        session.refresh_from_db()
+
+        self.assertEqual(session.step_started_at.get(SurveySession.STEP_ENGLISH_PAPER), started_at)
+
+    def test_english_paper_script_recomputes_countdown_after_browser_back_restore(self):
+        script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "english-paper.js").read_text(encoding="utf-8")
+        stylesheet = (Path(settings.BASE_DIR) / "static" / "survey" / "css" / "site.css").read_text(encoding="utf-8")
+
+        self.assertIn("deadlineAt", script)
+        self.assertIn("root.dataset.deadlineAt", script)
+        self.assertIn("Date.now()", script)
+        self.assertIn('window.addEventListener("pageshow"', script)
+        self.assertIn("text-align: center", stylesheet)
+        self.assertIn("justify-items: center", stylesheet)
+
+    def test_english_paper_deadline_survives_cached_back_navigation(self):
+        user, batch, session, round_obj = self.create_round_for_step("final_text", username="p_paper_deadline")
+        batch.english_paper_duration_hours = 24
+        batch.save(update_fields=["english_paper_duration_hours"])
+        self.client.post(reverse("survey:text_response", args=["final_text"]), {"final_text": "最终想法"})
+        session.refresh_from_db()
+        started_at = timezone.now() - timedelta(seconds=120)
+        session.step_started_at[SurveySession.STEP_ENGLISH_PAPER] = started_at.isoformat()
+        session.save(update_fields=["step_started_at"])
+
+        page = self.client.get(reverse("survey:english_paper"))
+        content = page.content.decode("utf-8")
+        deadline_match = re.search(r'data-deadline-at="(\d+)"', content)
+        remaining_match = re.search(r'data-remaining-seconds="(\d+)"', content)
+
+        self.assertIsNotNone(deadline_match)
+        self.assertIsNotNone(remaining_match)
+        deadline_at = int(deadline_match.group(1))
+        remaining = int(remaining_match.group(1))
+        expected_deadline = int((started_at + timedelta(hours=24)).timestamp() * 1000)
+        self.assertLess(abs(deadline_at - expected_deadline), 2000)
+        self.assertLess(remaining, 86400)
+        self.assertGreater(remaining, 86200)
+        self.assertIn("no-store", page.headers.get("Cache-Control", ""))
 
     def test_english_paper_draft_can_be_saved_and_restored(self):
         user, batch, session, round_obj = self.create_round_for_step("final_text", username="p_paper_draft")
@@ -590,9 +718,15 @@ class SurveyViewTests(TestCase):
         self.assertContains(response, "语音输入")
         self.assertContains(response, 'class="chat-compose"')
         self.assertContains(response, 'data-confirm-finish')
+        self.assertContains(response, 'data-finish-modal')
+        self.assertContains(response, 'data-finish-confirm')
+        self.assertContains(response, 'data-finish-cancel')
         self.assertContains(response, 'class="finish-button"')
         self.assertContains(response, 'data-chat-status')
         self.assertContains(response, 'data-no-paste="true"')
+        self.assertContains(response, 'data-stop-reply')
+        self.assertContains(response, '暂停回复')
+        self.assertContains(response, "survey/js/chat.js?v=")
 
     def test_chat_page_restores_saved_messages_after_refresh(self):
         user, batch, session, round_obj = self.create_round_for_step("chat", username="p_chat_history")
@@ -640,11 +774,13 @@ class SurveyViewTests(TestCase):
         self.assertLess(remaining, 300)
         self.assertGreater(remaining, 150)
 
-    def test_chat_script_reveals_stream_at_readable_pace(self):
+    def test_chat_script_flushes_stream_chunks_without_typewriter_delay(self):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "chat.js").read_text(encoding="utf-8")
 
         self.assertIn("function createTextRevealer", script)
-        self.assertIn("window.setInterval(revealNext", script)
+        self.assertIn("window.requestAnimationFrame", script)
+        self.assertIn("pending += text", script)
+        self.assertNotIn("window.setInterval(revealNext", script)
         self.assertIn("正在整理回复", script)
         self.assertIn("event: error", script)
 
@@ -660,8 +796,21 @@ class SurveyViewTests(TestCase):
         script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "chat.js").read_text(encoding="utf-8")
 
         self.assertIn("data-confirm-finish", script)
-        self.assertIn("确认完成这轮对话吗", script)
+        self.assertIn("data-finish-modal", script)
+        self.assertIn("data-finish-confirm", script)
+        self.assertIn("data-finish-cancel", script)
+        self.assertIn("finishForm.submit()", script)
+        self.assertNotIn("window.confirm", script)
         self.assertIn("event.preventDefault()", script)
+
+    def test_chat_script_keeps_input_available_and_can_stop_reply(self):
+        script = (Path(settings.BASE_DIR) / "static" / "survey" / "js" / "chat.js").read_text(encoding="utf-8")
+
+        self.assertIn("AbortController", script)
+        self.assertIn("data-stop-reply", script)
+        self.assertIn("controller.abort()", script)
+        self.assertIn("signal: controller.signal", script)
+        self.assertNotIn("input.disabled = true", script)
 
     def test_done_page_renders_completion_card_without_answers(self):
         user, batch = self.create_ready_user(username="p_done")

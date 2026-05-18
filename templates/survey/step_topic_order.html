@@ -30,6 +30,7 @@
               <circle cx="11" cy="12" r="1.5"/>
             </svg>
           </div>
+          <span class="topic-rank" data-topic-rank>{{ forloop.counter }}</span>
           <div class="topic-content">
             <h3>{{ topic.title }}</h3>
           </div>
@@ -47,4 +48,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260517-1"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260518-2"></script>{% endblock %}

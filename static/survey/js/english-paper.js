@@ -15,21 +15,30 @@
 
   if (root) {
     const value = root.querySelector("[data-countdown-value]");
-    let remaining = Number(root.dataset.remainingSeconds || 0);
+    const initialRemaining = Math.max(Number(root.dataset.remainingSeconds || 0), 0);
+    const deadlineAt = Number(root.dataset.deadlineAt || 0) || Date.now() + initialRemaining * 1000;
+    let remaining = initialRemaining;
 
-  function render() {
-    const hours = Math.floor(remaining / 3600);
-    const minutes = Math.floor((remaining % 3600) / 60);
-    const seconds = remaining % 60;
-    value.textContent = `${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(seconds)}`;
-    root.classList.toggle("is-expired", remaining <= 0);
-  }
+    function updateRemaining() {
+      remaining = Math.max(Math.ceil((deadlineAt - Date.now()) / 1000), 0);
+      root.dataset.remainingSeconds = String(remaining);
+    }
 
-  render();
-  window.setInterval(() => {
-    remaining = Math.max(remaining - 1, 0);
+    function render() {
+      updateRemaining();
+      const hours = Math.floor(remaining / 3600);
+      const minutes = Math.floor((remaining % 3600) / 60);
+      const seconds = remaining % 60;
+      value.textContent = `${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(seconds)}`;
+      root.classList.toggle("is-expired", remaining <= 0);
+    }
+
     render();
-  }, 1000);
+    window.setInterval(render, 1000);
+    window.addEventListener("pageshow", render);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) render();
+    });
   }
 
   if (saveButton && textarea) {
@@ -49,11 +58,11 @@
         if (status) status.textContent = `已暂存 ${payload.saved_at || ""}`.trim();
         saveButton.textContent = "已暂存";
         window.setTimeout(() => {
-          saveButton.textContent = "暂时保存";
+          saveButton.textContent = "暂存想法";
         }, 1200);
       } catch (error) {
         if (status) status.textContent = "暂存失败，请稍后再试。";
-        saveButton.textContent = "暂时保存";
+        saveButton.textContent = "暂存想法";
       } finally {
         saveButton.disabled = false;
       }

@@ -55,3 +55,4 @@ python manage.py check
 - 参与者开始后会保存批次和话题材料快照。
 - 前端 JavaScript 只增强拖拽排序、评分按钮、质量事件、录音上传和流式聊天，不作为流程可信来源。
 - 系统不会持久化原始音频，只保存参与者确认后的最终文本和输入方式。
+- 若启用语音转文字，请在后台“模型和 API”的对应 Key 支持模型中加入 `whisper-1`，并保持 `DEFAULT_TRANSCRIBE_MODEL=whisper-1`。

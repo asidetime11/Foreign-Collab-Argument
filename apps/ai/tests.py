@@ -72,6 +72,42 @@ class AIViewTests(TestCase):
         self.assertEqual(ConversationMessage.objects.filter(round=round_obj, role="participant").count(), 1)
         self.assertEqual(ConversationMessage.objects.get(round=round_obj, role="assistant").content, "你好")
 
+    def test_chat_stream_yields_first_chunk_before_consuming_full_generator(self):
+        user, round_obj = self._round("p_stream_first")
+        self._provider()
+        self.client.force_login(user)
+        events = []
+
+        def fake_chat_stream(messages, provider=None, **kwargs):
+            events.append("started")
+            yield "first"
+            events.append("after-first")
+            yield "second"
+
+        with patch("apps.ai.views.chat_stream", side_effect=fake_chat_stream):
+            response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "hello"})
+            first_payload = next(iter(response.streaming_content)).decode("utf-8")
+
+        self.assertIn("data: first", first_payload)
+        self.assertEqual(events, ["started"])
+
+    def test_chat_stream_saves_partial_assistant_message_after_first_chunk(self):
+        user, round_obj = self._round("p_stream_partial")
+        self._provider()
+        self.client.force_login(user)
+
+        def fake_chat_stream(messages, provider=None, **kwargs):
+            yield "partial"
+            yield " rest"
+
+        with patch("apps.ai.views.chat_stream", side_effect=fake_chat_stream):
+            response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "hello"})
+            first_payload = next(iter(response.streaming_content)).decode("utf-8")
+
+        self.assertIn("data: partial", first_payload)
+        assistant = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(assistant.content, "partial")
+
     @patch("apps.ai.clients.OpenAI")
     def test_chat_stream_skips_empty_provider_chunks(self, openai_cls):
         class Delta:
@@ -240,6 +276,25 @@ class AIViewTests(TestCase):
         self.assertEqual(assistant.content, "")
         self.assertIn("upstream exploded", assistant.error_message)
 
+    def test_chat_preserves_partial_assistant_message_when_stream_fails_after_output(self):
+        user, round_obj = self._round("p_partial_fail")
+        self._provider(name="partial-fail", model="partial-model", key="partial-key")
+        self.client.force_login(user)
+
+        def fake_chat_stream(messages, provider=None, **kwargs):
+            yield "partial answer"
+            raise Exception("stream exploded after partial output")
+
+        with patch("apps.ai.views.chat_stream", side_effect=fake_chat_stream):
+            response = self.client.post(reverse("ai:chat", args=[round_obj.pk]), {"message": "hello"})
+            payload = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertIn("data: partial answer", payload)
+        self.assertIn("event: error", payload)
+        assistant = ConversationMessage.objects.get(round=round_obj, role="assistant")
+        self.assertEqual(assistant.content, "partial answer")
+        self.assertIn("stream exploded after partial output", assistant.error_message)
+
     def test_chat_reports_backend_configuration_error_without_env_fallback(self):
         user, round_obj = self._round("p_no_provider")
         self.client.force_login(user)
@@ -253,7 +308,7 @@ class AIViewTests(TestCase):
 
     @patch("apps.ai.clients.OpenAI")
     def test_transcribe_audio_uses_backend_provider_credentials(self, openai_cls):
-        self._provider(name="voice", model="chat-model", key="voice-key")
+        self._provider(name="voice", model="chat-model", key="voice-key", key_models="chat-model\ngpt-4o-mini-transcribe")
         openai_cls.return_value.audio.transcriptions.create.return_value.text = "语音转写结果"
         audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
 
@@ -263,8 +318,44 @@ class AIViewTests(TestCase):
         openai_cls.assert_called_once_with(api_key="voice-key", base_url="https://voice.example/v1")
         openai_cls.return_value.audio.transcriptions.create.assert_called_once_with(
             model="gpt-4o-mini-transcribe",
-            file=audio_file,
+            file=("voice.webm", b"audio-bytes", "audio/webm"),
         )
+
+    @patch("apps.ai.clients.OpenAI")
+    def test_transcribe_audio_requires_key_that_supports_transcribe_model(self, openai_cls):
+        self._provider(name="voice", model="gpt-5", key="voice-key", key_models="gpt-5")
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with self.assertRaisesMessage(ImproperlyConfigured, "whisper-1"):
+            transcribe_audio(audio_file, "whisper-1")
+
+        openai_cls.assert_not_called()
+
+    @patch("apps.ai.clients.OpenAI")
+    def test_transcribe_audio_uses_key_that_supports_transcribe_model(self, openai_cls):
+        provider = LLMProvider.objects.create(
+            name="voice",
+            model_name="gpt-5",
+            base_url="https://voice.example/v1",
+            priority=1,
+        )
+        chat_only_key = APIKey.objects.create(provider=provider, api_key="chat-key", model_name="gpt-5", usage_count=0)
+        voice_key = APIKey.objects.create(provider=provider, api_key="voice-key", model_name="gpt-5\nwhisper-1", usage_count=5)
+        openai_cls.return_value.audio.transcriptions.create.return_value.text = "语音转写结果"
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        text = transcribe_audio(audio_file, "whisper-1")
+
+        self.assertEqual(text, "语音转写结果")
+        openai_cls.assert_called_once_with(api_key="voice-key", base_url="https://voice.example/v1")
+        openai_cls.return_value.audio.transcriptions.create.assert_called_once_with(
+            model="whisper-1",
+            file=("voice.webm", b"audio-bytes", "audio/webm"),
+        )
+        chat_only_key.refresh_from_db()
+        voice_key.refresh_from_db()
+        self.assertEqual(chat_only_key.usage_count, 0)
+        self.assertEqual(voice_key.usage_count, 6)
 
     def test_transcribe_endpoint_returns_text_and_model(self):
         user = User.objects.create_user("p_voice", password="pass")
@@ -276,5 +367,45 @@ class AIViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["text"], "这是转写文字")
-        self.assertEqual(response.json()["model"], "gpt-4o-mini-transcribe")
+        self.assertEqual(response.json()["model"], "whisper-1")
         transcribe.assert_called_once()
+
+    def test_transcribe_endpoint_returns_json_error_when_provider_call_fails(self):
+        user = User.objects.create_user("p_voice_error", password="pass")
+        self.client.force_login(user)
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with patch("apps.ai.views.transcribe_audio", side_effect=Exception("model_not_found: whisper-1")):
+            response = self.client.post(reverse("ai:transcribe"), {"audio": audio_file})
+
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("语音转写失败", response.json()["error"])
+        self.assertIn("model_not_found", response.json()["detail"])
+
+    def test_transcribe_endpoint_prints_provider_error_to_terminal(self):
+        user = User.objects.create_user("p_voice_print_error", password="pass")
+        self.client.force_login(user)
+        audio_file = SimpleUploadedFile("voice.webm", b"audio-bytes", content_type="audio/webm")
+
+        with (
+            patch("apps.ai.views.transcribe_audio", side_effect=Exception("unsupported endpoint")),
+            patch("builtins.print") as print_mock,
+        ):
+            self.client.post(reverse("ai:transcribe"), {"audio": audio_file})
+
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("[transcribe] provider error: unsupported endpoint", printed)
+
+    def test_transcribe_debug_endpoint_prints_frontend_event_to_terminal(self):
+        user = User.objects.create_user("p_voice_debug", password="pass")
+        self.client.force_login(user)
+
+        with patch("builtins.print") as print_mock:
+            response = self.client.post(
+                reverse("ai:transcribe_debug"),
+                {"event": "upload-start", "detail": "chunks=1 bytes=123"},
+            )
+
+        self.assertEqual(response.status_code, 204)
+        printed = "\n".join(str(call.args[0]) for call in print_mock.call_args_list if call.args)
+        self.assertIn("[recorder] upload-start: chunks=1 bytes=123", printed)

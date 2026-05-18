@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from apps.experiments.defaults import DEFAULT_TOPIC_ORDER_INTRO_ZH
@@ -18,7 +19,9 @@ from .forms import AIModeForm, CommentReactionForm, EnglishPaperForm, ScaleForm,
 from .models import CommentReaction, EnglishPaperDraft, EnglishPaperResponse, PostReaction, ScaleResponse, SurveySession, TextResponse
 from .services import (
     SESSION_DONE,
+    STEP_RESEARCH_CONSENT,
     STEP_TOPIC_ORDER,
+    accept_research_consent,
     advance_after_mode,
     complete_round_step,
     complete_english_paper,
@@ -33,6 +36,7 @@ from .services import (
 
 
 STEP_META = {
+    "consent": {"number": 1, "title": "参与研究授权同意书", "kind": "consent"},
     "topic_order": {"number": 1, "title": "先排一排你最在意的话题", "kind": "sort"},
     "post": {"number": 2, "title": "阅读帖子与评论", "kind": "read"},
     "emotion": {"number": 3, "title": "当前感受", "kind": "mood"},
@@ -74,6 +78,8 @@ def _guard_session(request):
 
 def _current_route(session):
     step = current_step(session)
+    if step == STEP_RESEARCH_CONSENT:
+        return reverse("survey:consent")
     if step == STEP_TOPIC_ORDER:
         return reverse("survey:topic_order")
     if step == SESSION_DONE:
@@ -126,6 +132,16 @@ def _remaining_seconds_from_started(started_raw, total_seconds):
     return max(total_seconds - elapsed, 0)
 
 
+def _deadline_timestamp_ms_from_started(started_raw, total_seconds):
+    started_at = parse_datetime(started_raw or "")
+    if not started_at:
+        started_at = timezone.now()
+    if timezone.is_naive(started_at):
+        started_at = timezone.make_aware(started_at, timezone.get_current_timezone())
+    deadline_at = started_at + timezone.timedelta(seconds=total_seconds)
+    return int(deadline_at.timestamp() * 1000)
+
+
 def _round_progress_context(session):
     total = max(session.rounds.count(), len(session.round_order), 1)
     current = min(int(session.current_round_index or 0) + 1, total)
@@ -138,6 +154,30 @@ def start(request):
     if response:
         return response
     return redirect(_current_route(session))
+
+
+@login_required
+def consent(request):
+    session, response = _guard_session(request)
+    if response:
+        return response
+    wrong_step = _require_current(session, STEP_RESEARCH_CONSENT)
+    if wrong_step:
+        return wrong_step
+    if request.method == "POST":
+        if request.POST.get("agree") != "on":
+            return render(
+                request,
+                "survey/step_consent.html",
+                {
+                    "session": session,
+                    "step_meta": _step_context("consent"),
+                    "error": "请先勾选同意，再进入下一步。",
+                },
+            )
+        accept_research_consent(session)
+        return redirect(_current_route(session))
+    return render(request, "survey/step_consent.html", {"session": session, "step_meta": _step_context("consent")})
 
 
 @login_required
@@ -392,6 +432,7 @@ def done(request):
 
 
 @login_required
+@never_cache
 def english_paper(request):
     session, response = _guard_session(request)
     if response:
@@ -403,6 +444,10 @@ def english_paper(request):
     duration_hours = session.batch.english_paper_duration_hours or session.batch_snapshot.get("english_paper_duration_hours", 24)
     total_seconds = max(int(duration_hours or 0) * 3600, 0)
     remaining_seconds = _remaining_seconds_from_started(
+        session.step_started_at.get(SurveySession.STEP_ENGLISH_PAPER),
+        total_seconds,
+    )
+    deadline_at = _deadline_timestamp_ms_from_started(
         session.step_started_at.get(SurveySession.STEP_ENGLISH_PAPER),
         total_seconds,
     )
@@ -431,6 +476,7 @@ def english_paper(request):
             "prompt": prompt,
             "duration_hours": duration_hours,
             "remaining_seconds": remaining_seconds,
+            "deadline_at": deadline_at,
             "draft": draft,
             "step_meta": _step_context("english_paper"),
         },

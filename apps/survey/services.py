@@ -8,8 +8,20 @@ from .models import QualityEvent, SurveySession, TopicRound
 
 
 STEP_TOPIC_ORDER = "topic_order"
+STEP_RESEARCH_CONSENT = "consent"
+RESEARCH_CONSENT_KEY = "research_consent"
 ROUND_STEPS = ["post", "emotion", "stance_before", "initial_text", "mode", "chat", "ai_eval", "stance_after", "final_text"]
 SESSION_DONE = "done"
+
+
+def has_research_consent(session: SurveySession):
+    return bool(session.step_submitted_at.get(RESEARCH_CONSENT_KEY))
+
+
+def accept_research_consent(session: SurveySession):
+    session.step_submitted_at[RESEARCH_CONSENT_KEY] = timezone.now().isoformat()
+    session.save(update_fields=["step_submitted_at"])
+    return session
 
 
 def get_or_create_session(user, language="zh-hans"):
@@ -53,6 +65,8 @@ def _topic_snapshots(batch: ExperimentBatch):
 
 
 def submit_topic_order(session: SurveySession, ordered_topic_ids):
+    if not has_research_consent(session):
+        raise PermissionError("research consent is required")
     if session.current_session_step != STEP_TOPIC_ORDER or session.submitted_topic_order:
         raise PermissionError("topic order already submitted")
     ids = [int(value) for value in ordered_topic_ids]
@@ -99,6 +113,8 @@ def current_step(session: SurveySession):
     if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER:
         return SurveySession.STEP_ENGLISH_PAPER
     if session.current_session_step == STEP_TOPIC_ORDER:
+        if not has_research_consent(session):
+            return STEP_RESEARCH_CONSENT
         return STEP_TOPIC_ORDER
     round_obj = current_round(session)
     return round_obj.current_step if round_obj else SESSION_DONE
@@ -106,6 +122,10 @@ def current_step(session: SurveySession):
 
 def start_current_step(session: SurveySession):
     now = timezone.now().isoformat()
+    if current_step(session) == STEP_RESEARCH_CONSENT:
+        session.step_started_at.setdefault(STEP_RESEARCH_CONSENT, now)
+        session.save(update_fields=["step_started_at"])
+        return
     if session.current_session_step == STEP_TOPIC_ORDER:
         session.step_started_at.setdefault(STEP_TOPIC_ORDER, now)
         session.save(update_fields=["step_started_at"])
@@ -152,6 +172,7 @@ def _complete_round(round_obj: TopicRound):
     next_index = session.current_round_index + 1
     if next_index >= session.rounds.count():
         session.current_session_step = SurveySession.STEP_ENGLISH_PAPER
+        session.step_started_at.setdefault(SurveySession.STEP_ENGLISH_PAPER, timezone.now().isoformat())
     else:
         session.current_round_index = next_index
     session.save()

@@ -63,6 +63,17 @@
     font-size: 19px;
   }
 
+  .detail-subtitle {
+    margin: 18px 0 10px;
+    color: #29465b;
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .detail-subtitle:first-of-type {
+    margin-top: 0;
+  }
+
   .detail-list {
     display: grid;
     gap: 10px;
@@ -203,13 +214,14 @@
 
   <section class="detail-grid">
     <div class="detail-card">
-      <h2>账号资料</h2>
+      <h2>资料</h2>
       <dl class="detail-list">
         <div class="detail-row"><dt>称呼/姓名</dt><dd>{{ profile.display_name|default:"-" }}</dd></div>
         <div class="detail-row"><dt>地区</dt><dd>{{ profile.region|default:"-" }}</dd></div>
         <div class="detail-row"><dt>年龄段</dt><dd>{{ profile.age_range|default:"-" }}</dd></div>
         <div class="detail-row"><dt>性别</dt><dd>{{ profile.gender|default:"-" }}</dd></div>
         <div class="detail-row"><dt>联系方式</dt><dd>{{ profile.contact|default:"-" }}</dd></div>
+        <div class="detail-row"><dt>备注</dt><dd>{{ profile.notes|default:"-" }}</dd></div>
       </dl>
     </div>
 
@@ -224,7 +236,137 @@
       </dl>
     </div>
 
-    <div class="detail-card">
+    <div class="detail-card wide">
+      <h2>话题排序</h2>
+      {% if topic_order_rows %}
+        <div class="table-wrap">
+          <table class="detail-table">
+            <thead><tr><th>排序</th><th>话题</th><th>入选轮次</th></tr></thead>
+            <tbody>
+            {% for item in topic_order_rows %}
+              <tr>
+                <td><span class="score-badge">{{ item.rank }}</span></td>
+                <td class="answer-cell">{{ item.title }}</td>
+                <td>{% if item.marker %}<span class="pill">{{ item.marker }}</span>{% else %}<span class="muted">未入选</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-note">暂无话题排序记录。</p>
+      {% endif %}
+    </div>
+
+    {% for section in round_sections %}
+      <div class="detail-card wide">
+        <h2>{{ section.label }}</h2>
+        <p class="section-intro">{{ section.topic_title }}</p>
+
+        <h3 class="detail-subtitle">量表记录</h3>
+        {% if section.scale_rows %}
+          <div class="table-wrap">
+            <table class="detail-table">
+              <thead><tr><th>答题阶段</th><th>题目</th><th>选择分数</th><th>范围</th><th>提交时间</th></tr></thead>
+              <tbody>
+              {% for item in section.scale_rows %}
+                <tr>
+                  <td>
+                    <div class="meta-stack">
+                      <span class="record-title">{{ item.step_label }}</span>
+                      {% if item.step_hint %}<span class="row-note">{{ item.step_hint }}</span>{% endif %}
+                    </div>
+                  </td>
+                  <td class="answer-cell">{{ item.item_label }}</td>
+                  <td><span class="score-badge">{{ item.value }}</span></td>
+                  <td>{{ item.range }}</td>
+                  <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="empty-note">暂无量表记录。</p>
+        {% endif %}
+
+        <h3 class="detail-subtitle">文本记录</h3>
+        {% if section.text_rows %}
+          <div class="table-wrap">
+            <table class="detail-table">
+              <thead><tr><th>答题阶段</th><th>内容</th><th>字数</th><th>提交时间</th></tr></thead>
+              <tbody>
+              {% for item in section.text_rows %}
+                <tr>
+                  <td>
+                    <div class="meta-stack">
+                      <span class="record-title">{{ item.step_label }}</span>
+                      {% if item.step_hint %}<span class="row-note">{{ item.step_hint }}</span>{% endif %}
+                    </div>
+                  </td>
+                  <td class="answer-cell">
+                    {{ item.content|linebreaksbr }}
+                    {% if item.was_edited %}<br><span class="muted">提交前编辑过转写文本</span>{% endif %}
+                  </td>
+                  <td>{{ item.word_count }}</td>
+                  <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="empty-note">暂无文本记录。</p>
+        {% endif %}
+
+        <h3 class="detail-subtitle">帖子和评论互动</h3>
+        {% if section.interaction_rows %}
+          <div class="table-wrap">
+            <table class="detail-table">
+              <thead><tr><th>互动对象</th><th>对象说明</th><th>用户操作</th><th>提交时间</th></tr></thead>
+              <tbody>
+              {% for item in section.interaction_rows %}
+                <tr>
+                  <td><span class="pill">{{ item.type }}</span></td>
+                  <td>{{ item.target }}</td>
+                  <td>{{ item.reaction }}</td>
+                  <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="empty-note">暂无互动记录。</p>
+        {% endif %}
+
+        <h3 class="detail-subtitle">AI 对话</h3>
+        {% if section.conversation_rows %}
+          <div class="table-wrap">
+            <table class="detail-table">
+              <thead><tr><th>发言者</th><th>内容</th><th>模型 / 状态</th><th>时间</th></tr></thead>
+              <tbody>
+              {% for item in section.conversation_rows %}
+                <tr>
+                  <td>{{ item.role }}</td>
+                  <td class="answer-cell">{{ item.content|default:"-"|linebreaksbr }}</td>
+                  <td>
+                    {{ item.model_name|default:"-" }}
+                    {% if item.error_message %}<br><span class="muted">调用失败：{{ item.error_message|truncatechars:80 }}</span>{% endif %}
+                  </td>
+                  <td>{{ item.created_at|date:"Y年n月j日 H:i" }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="empty-note">暂无 AI 对话记录。</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="detail-card wide">
       <h2>英文论文</h2>
       {% if english_paper %}
         <dl class="detail-list">
@@ -234,141 +376,6 @@
         </dl>
       {% else %}
         <p class="empty-note">暂未提交英文论文。</p>
-      {% endif %}
-    </div>
-
-    <div class="detail-card wide">
-      <h2>量表记录</h2>
-      <p class="section-intro">这里展示用户在不同阶段做出的量表选择。分数越接近量表右侧，表示越偏向右侧选项；“范围”是该题可选分数区间。</p>
-      {% if scale_rows %}
-        <div class="table-wrap">
-          <table class="detail-table">
-            <thead><tr><th>话题轮次</th><th>答题阶段</th><th>题目</th><th>选择分数</th><th>范围</th><th>提交时间</th></tr></thead>
-            <tbody>
-            {% for item in scale_rows %}
-              <tr>
-                <td>
-                  <div class="meta-stack">
-                    <span class="pill">{{ item.round_label }}</span>
-                    <span class="muted">{{ item.topic_title }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="meta-stack">
-                    <span class="record-title">{{ item.step_label }}</span>
-                    {% if item.step_hint %}<span class="row-note">{{ item.step_hint }}</span>{% endif %}
-                  </div>
-                </td>
-                <td class="answer-cell">{{ item.item_label }}</td>
-                <td><span class="score-badge">{{ item.value }}</span></td>
-                <td>{{ item.range }}</td>
-                <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="empty-note">暂无量表记录。</p>
-      {% endif %}
-    </div>
-
-    <div class="detail-card wide">
-      <h2>文本记录</h2>
-      <p class="section-intro">这里展示用户在 AI 对话前后提交的开放式文字回答，便于比较观点是否发生变化。</p>
-      {% if text_rows %}
-        <div class="table-wrap">
-          <table class="detail-table">
-            <thead><tr><th>话题轮次</th><th>答题阶段</th><th>内容</th><th>字数</th><th>输入方式</th><th>提交时间</th></tr></thead>
-            <tbody>
-            {% for item in text_rows %}
-              <tr>
-                <td>
-                  <div class="meta-stack">
-                    <span class="pill">{{ item.round_label }}</span>
-                    <span class="muted">{{ item.topic_title }}</span>
-                  </div>
-                </td>
-                <td>
-                  <div class="meta-stack">
-                    <span class="record-title">{{ item.step_label }}</span>
-                    {% if item.step_hint %}<span class="row-note">{{ item.step_hint }}</span>{% endif %}
-                  </div>
-                </td>
-                <td class="answer-cell">{{ item.content|linebreaksbr }}</td>
-                <td>{{ item.word_count }}</td>
-                <td>{{ item.input_method }}{% if item.was_edited %}<br><span class="muted">提交前编辑过</span>{% endif %}</td>
-                <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="empty-note">暂无文本记录。</p>
-      {% endif %}
-    </div>
-
-    <div class="detail-card wide">
-      <h2>帖子和评论互动</h2>
-      <p class="section-intro">这里记录用户是否对帖子或评论点了赞/点踩，用于理解用户对材料的即时反应。</p>
-      {% if interaction_rows %}
-        <div class="table-wrap">
-          <table class="detail-table">
-            <thead><tr><th>互动对象</th><th>话题轮次</th><th>对象说明</th><th>用户操作</th><th>提交时间</th></tr></thead>
-            <tbody>
-            {% for item in interaction_rows %}
-              <tr>
-                <td><span class="pill">{{ item.type }}</span></td>
-                <td>
-                  <div class="meta-stack">
-                    <span class="record-title">{{ item.round_label }}</span>
-                    <span class="muted">{{ item.topic_title }}</span>
-                  </div>
-                </td>
-                <td>{{ item.target }}</td>
-                <td>{{ item.reaction }}</td>
-                <td>{{ item.submitted_at|date:"Y年n月j日 H:i" }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="empty-note">暂无互动记录。</p>
-      {% endif %}
-    </div>
-
-    <div class="detail-card wide">
-      <h2>AI 对话</h2>
-      <p class="section-intro">这里按时间展示用户与 AI 的对话内容。若某次 AI 回复失败，会在模型栏下方显示错误摘要。</p>
-      {% if conversation_rows %}
-        <div class="table-wrap">
-          <table class="detail-table">
-            <thead><tr><th>话题轮次</th><th>发言者</th><th>内容</th><th>模型 / 状态</th><th>时间</th></tr></thead>
-            <tbody>
-            {% for item in conversation_rows %}
-              <tr>
-                <td>
-                  <div class="meta-stack">
-                    <span class="pill">{{ item.round_label }}</span>
-                    <span class="muted">{{ item.topic_title }}</span>
-                  </div>
-                </td>
-                <td>{{ item.role }}</td>
-                <td class="answer-cell">{{ item.content|default:"-"|linebreaksbr }}</td>
-                <td>
-                  {{ item.model_name|default:"-" }}
-                  {% if item.error_message %}<br><span class="muted">调用失败：{{ item.error_message|truncatechars:80 }}</span>{% endif %}
-                </td>
-                <td>{{ item.created_at|date:"Y年n月j日 H:i" }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <p class="empty-note">暂无 AI 对话记录。</p>
       {% endif %}
     </div>
   </section>

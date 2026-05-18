@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from apps.survey.models import CommentReaction, ConversationMessage, ScaleResponse, SurveySession, TextResponse
+from apps.survey.models import CommentReaction, ConversationMessage, EnglishPaperResponse, ScaleResponse, SurveySession, TextResponse
 from apps.accounts.models import ParticipantProfile
 
 from .models import AIMode, APIKey, ExperimentBatch, LLMProvider, RatingScaleConfig, ScaleItem, Topic, TopicComment
@@ -439,10 +439,10 @@ class ExperimentModelTests(TestCase):
         response = self.client.get(reverse("research_admin_export_all"))
 
         rows = list(csv.DictReader(StringIO(response.content.decode("utf-8-sig"))))
-        self.assertEqual(rows[0]["用户名"], "p_react")
-        self.assertIn("comment-101", rows[0]["评论互动"])
-        self.assertIn("小兔", rows[0]["评论互动"])
-        self.assertIn("赞", rows[0]["评论互动"])
+        self.assertEqual(rows[0]["资料-用户名"], "p_react")
+        self.assertIn("评论 #101", rows[0]["高分话题-帖子和评论互动1"])
+        self.assertIn("小兔", rows[0]["高分话题-帖子和评论互动1"])
+        self.assertIn("赞", rows[0]["高分话题-帖子和评论互动1"])
 
     def test_bulk_register_confirm_creates_users_then_shows_them_in_user_data(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
@@ -510,10 +510,21 @@ class ExperimentModelTests(TestCase):
         self.assertContains(response, reverse("research_admin_bulk_register"))
         self.assertContains(response, reverse("research_admin_export_all"))
         self.assertContains(response, reverse("research_admin_user_detail", args=[participant.pk]))
+        self.assertContains(response, 'class="records-check"')
+        self.assertContains(response, "width: 16px")
+        self.assertContains(response, "height: 16px")
+        self.assertContains(response, "min-height: 16px")
+        self.assertContains(response, "padding: 0")
+        self.assertContains(response, "min-height: 42px")
+        self.assertContains(response, 'data-delete-modal')
+        self.assertNotContains(response, "window.confirm")
 
     def test_user_detail_page_shows_single_user_records_and_countdown(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")
         batch = ExperimentBatch.objects.create(name="批次 A", is_active=True, english_paper_duration_hours=24)
+        high_topic = Topic.objects.create(batch=batch, title_zh="高分题", position=1)
+        middle_topic = Topic.objects.create(batch=batch, title_zh="中间题", position=2)
+        low_topic = Topic.objects.create(batch=batch, title_zh="低分题", position=3)
         participant = User.objects.create_user("detail_user", password="Start12345")
         participant.participant_profile.batch = batch
         participant.participant_profile.display_name = "参与者"
@@ -522,9 +533,17 @@ class ExperimentModelTests(TestCase):
             user=participant,
             batch=batch,
             step_started_at={SurveySession.STEP_ENGLISH_PAPER: timezone.now().isoformat()},
-            topic_order_snapshot=[],
+            topic_order_snapshot=[
+                {"id": high_topic.pk, "title_zh": "高分题"},
+                {"id": middle_topic.pk, "title_zh": "中间题"},
+                {"id": low_topic.pk, "title_zh": "低分题"},
+            ],
+            submitted_topic_order=[high_topic.pk, middle_topic.pk, low_topic.pk],
+            selected_high_topic_id=high_topic.pk,
+            selected_low_topic_id=low_topic.pk,
         )
-        round_obj = session.rounds.create(round_type="high", topic_id=1)
+        round_obj = session.rounds.create(round_type="high", topic_id=high_topic.pk, material_snapshot={"title_zh": "高分题"})
+        session.rounds.create(round_type="low", topic_id=low_topic.pk, material_snapshot={"title_zh": "低分题"})
         ScaleResponse.objects.create(
             round=round_obj,
             step="emotion",
@@ -536,18 +555,25 @@ class ExperimentModelTests(TestCase):
             selected_value=5,
         )
         TextResponse.objects.create(round=round_obj, step="initial_text", final_text="我的想法", word_count=4)
+        EnglishPaperResponse.objects.create(session=session, prompt="Write.", duration_hours=24, paper_text="My essay.")
         self.client.force_login(admin_user)
 
         response = self.client.get(reverse("research_admin_user_detail", args=[participant.pk]))
 
         self.assertContains(response, "detail_user")
+        self.assertContains(response, "资料")
+        self.assertContains(response, "流程状态")
+        self.assertContains(response, "话题排序")
         self.assertContains(response, "英文倒计时")
         self.assertContains(response, "高分话题")
+        self.assertContains(response, "低分话题")
         self.assertContains(response, "当前感受量表")
         self.assertContains(response, "范围")
         self.assertContains(response, "AI 对话前文字回答")
         self.assertContains(response, "我的想法")
+        self.assertContains(response, "My essay.")
         self.assertContains(response, "返回后台主页面")
+        self.assertNotContains(response, "输入方式")
 
     def test_user_data_page_has_single_and_bulk_delete_controls(self):
         admin_user = User.objects.create_superuser("admin", "admin@example.com", "pass")

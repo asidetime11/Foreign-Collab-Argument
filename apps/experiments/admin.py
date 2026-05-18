@@ -142,7 +142,7 @@ class APIKeyInline(admin.TabularInline):
             "widget": forms.Textarea(
                 attrs={
                     "rows": 3,
-                    "placeholder": "每行一个模型，例如：\ndeepseek-r1\ngpt-5-mini\nqwen-plus",
+                    "placeholder": "每行一个模型，例如：\ngpt-5\nwhisper-1\nqwen-plus",
                 }
             )
         },

@@ -219,20 +219,24 @@ class LLMProvider(models.Model):
     def __str__(self):
         return f"{self.name} ({self.model_name})"
 
-    def get_next_api_key(self):
+    def get_next_api_key(self, model_name=None):
         """获取下一个可用的API Key（轮询分配）"""
         from django.db import transaction
         from django.db.models import F
 
         with transaction.atomic():
             # 获取所有启用的key，按使用次数排序
-            keys = self.api_keys.filter(is_active=True).select_for_update().order_by('usage_count', 'id')
+            keys = list(self.api_keys.filter(is_active=True).select_for_update().order_by('usage_count', 'id'))
+            if model_name:
+                keys = [key for key in keys if key.supports_model(model_name)]
 
-            if not keys.exists():
+            if not keys:
+                if model_name:
+                    raise ValueError(f"提供商 {self.name} 没有启用且支持 {model_name} 的 API Key")
                 raise ValueError(f"提供商 {self.name} 没有可用的API Key")
 
             # 获取使用次数最少的key
-            selected_key = keys.first()
+            selected_key = keys[0]
 
             # 增加使用计数
             selected_key.usage_count = F('usage_count') + 1
@@ -284,4 +288,9 @@ class APIKey(models.Model):
         if models:
             return models[0]
         return self.provider.model_name
+
+    def supports_model(self, model_name):
+        if not model_name:
+            return True
+        return model_name == self.default_model_name() or model_name in self.model_names()
 

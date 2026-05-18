@@ -10,7 +10,7 @@ except ImportError:  # pragma: no cover - local environments should install it.
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if load_dotenv:
-    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR / ".env", override=True)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
@@ -91,7 +91,7 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "survey:start"
 LOGOUT_REDIRECT_URL = "login"
 
-DEFAULT_TRANSCRIBE_MODEL = os.getenv("DEFAULT_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
+DEFAULT_TRANSCRIBE_MODEL = os.getenv("DEFAULT_TRANSCRIBE_MODEL", "whisper-1")
 
 if "test" in sys.argv:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

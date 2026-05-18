@@ -41,8 +41,16 @@
   .records-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     justify-content: flex-end;
+  }
+
+  .records-actions .button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 10px 18px;
+    font-size: 14px;
   }
 
   .records-summary {
@@ -121,7 +129,8 @@
     background: #b3261e;
     color: #fff;
     font-weight: 800;
-    padding: 9px 13px;
+    min-height: 42px;
+    padding: 10px 16px;
     cursor: pointer;
     box-shadow: 0 8px 18px rgba(179, 38, 30, .16);
   }
@@ -131,7 +140,7 @@
   }
 
   .danger-button.inline {
-    padding: 7px 10px;
+    padding: 9px 14px;
     box-shadow: none;
   }
 
@@ -141,8 +150,42 @@
   }
 
   .select-cell {
-    width: 44px;
+    width: 38px;
     text-align: center;
+  }
+
+  .records-check {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    min-height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 1.5px solid #b8dff7;
+    border-radius: 5px;
+    background: #fff;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+
+  .records-check:hover {
+    border-color: #1da1f2;
+    box-shadow: 0 0 0 3px rgba(29, 161, 242, .1);
+  }
+
+  .records-check:checked {
+    border-color: #1da1f2;
+    background-color: #1da1f2;
+    background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.6 3.7L5.8 9.5L2.7 6.4' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 11px 11px;
+  }
+
+  .records-check:focus-visible {
+    outline: 3px solid rgba(29, 161, 242, .24);
+    outline-offset: 2px;
   }
 
   .status-badge {
@@ -164,6 +207,57 @@
   .status-badge.idle {
     background: #f4f6f8;
     color: #536471;
+  }
+
+  .records-delete-modal[hidden] {
+    display: none;
+  }
+
+  .records-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .records-delete-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 20, 25, .46);
+    backdrop-filter: blur(3px);
+  }
+
+  .records-delete-panel {
+    position: relative;
+    z-index: 1;
+    width: min(420px, 100%);
+    border: 1px solid rgba(179, 38, 30, .16);
+    border-radius: 12px;
+    background: #fff;
+    padding: 22px;
+    box-shadow: 0 24px 70px rgba(15, 20, 25, .24);
+  }
+
+  .records-delete-panel h2 {
+    margin: 0 0 8px;
+    color: #0f1419;
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  .records-delete-panel p {
+    margin: 0;
+    color: #536471;
+    line-height: 1.65;
+  }
+
+  .records-delete-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
   }
 
   @media (max-width: 760px) {
@@ -206,7 +300,7 @@
       <table>
         <thead>
         <tr>
-          <th class="select-cell"><input type="checkbox" id="select-all-users" aria-label="选择全部用户"></th>
+          <th class="select-cell"><input class="records-check" type="checkbox" id="select-all-users" aria-label="选择全部用户"></th>
           <th>用户名</th>
           <th>称呼/姓名</th>
           <th>账号状态</th>
@@ -223,7 +317,7 @@
             <tr>
               <td class="select-cell">
                 {% if row.can_delete %}
-                  <input type="checkbox" name="user_ids" value="{{ row.user.pk }}" aria-label="选择 {{ row.user.username }}">
+                  <input class="records-check" type="checkbox" name="user_ids" value="{{ row.user.pk }}" aria-label="选择 {{ row.user.username }}">
                 {% endif %}
               </td>
               <td><a class="user-link" href="{% url 'research_admin_user_detail' row.user.pk %}">{{ row.user.username }}</a></td>
@@ -256,6 +350,17 @@
       </table>
     </form>
   </div>
+  <div class="records-delete-modal" data-delete-modal hidden>
+    <div class="records-delete-backdrop" data-delete-cancel></div>
+    <section class="records-delete-panel" role="dialog" aria-modal="true" aria-labelledby="records-delete-title">
+      <h2 id="records-delete-title">确认删除？</h2>
+      <p data-delete-message>删除后将无法恢复。</p>
+      <div class="records-delete-actions">
+        <button class="button" type="button" data-delete-cancel>取消</button>
+        <button class="danger-button" type="button" data-delete-confirm>确认删除</button>
+      </div>
+    </section>
+  </div>
 </div>
 {% endblock %}
 {% block extrabody %}
@@ -264,6 +369,32 @@
   (function () {
     const form = document.getElementById("records-delete-form");
     const selectAll = document.getElementById("select-all-users");
+    const deleteModal = document.querySelector("[data-delete-modal]");
+    const deleteMessage = document.querySelector("[data-delete-message]");
+    const deleteConfirm = document.querySelector("[data-delete-confirm]");
+    const deleteCancelButtons = document.querySelectorAll("[data-delete-cancel]");
+    let pendingSubmitter = null;
+
+    function openDeleteModal(message, submitter) {
+      pendingSubmitter = submitter;
+      if (deleteMessage) {
+        deleteMessage.textContent = message || "删除后将无法恢复。";
+      }
+      if (deleteModal) {
+        deleteModal.hidden = false;
+      }
+      if (deleteConfirm) {
+        deleteConfirm.focus();
+      }
+    }
+
+    function closeDeleteModal() {
+      if (deleteModal) {
+        deleteModal.hidden = true;
+      }
+      pendingSubmitter = null;
+    }
+
     if (selectAll) {
       selectAll.addEventListener("change", function () {
         form.querySelectorAll('input[name="user_ids"]').forEach((checkbox) => {
@@ -274,8 +405,31 @@
     form.addEventListener("submit", function (event) {
       const submitter = event.submitter;
       const message = submitter ? submitter.dataset.confirm : "";
-      if (message && !window.confirm(message)) {
+      if (message) {
         event.preventDefault();
+        openDeleteModal(message, submitter);
+      }
+    });
+    if (deleteConfirm) {
+      deleteConfirm.addEventListener("click", function () {
+        if (!pendingSubmitter) {
+          return;
+        }
+        if (pendingSubmitter.formAction) {
+          form.action = pendingSubmitter.formAction;
+        }
+        if (pendingSubmitter.formMethod) {
+          form.method = pendingSubmitter.formMethod;
+        }
+        form.submit();
+      });
+    }
+    deleteCancelButtons.forEach((button) => {
+      button.addEventListener("click", closeDeleteModal);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && deleteModal && !deleteModal.hidden) {
+        closeDeleteModal();
       }
     });
   })();
