@@ -1,0 +1,13 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools-items %}
+  <li>
+    <a href="{{ import_url }}" class="addlink" style="background-color:#00ba7c;">
+      从其他批次复制 Prompt
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}
+
+{% block content_title %}
+  <h1>AI 模式（Prompt） · 当前批次：<span style="color:#0a73b8;">{{ current_batch.name }}</span></h1>
+{% endblock %}

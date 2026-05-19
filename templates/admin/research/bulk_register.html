@@ -184,6 +184,12 @@
       <div class="bulk-errors">{{ form.non_field_errors }}</div>
     {% endif %}
     <div class="bulk-field">
+      <label for="{{ form.batch.id_for_label }}">{{ form.batch.label }}</label>
+      <p class="bulk-help">{{ form.batch.help_text }}</p>
+      {{ form.batch }}
+      {% if form.batch.errors %}<div class="bulk-errors">{{ form.batch.errors }}</div>{% endif %}
+    </div>
+    <div class="bulk-field">
       <label for="{{ form.initial_password.id_for_label }}">{{ form.initial_password.label }}</label>
       {{ form.initial_password }}
       {% if form.initial_password.errors %}<div class="bulk-errors">{{ form.initial_password.errors }}</div>{% endif %}

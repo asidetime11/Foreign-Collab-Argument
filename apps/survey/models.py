@@ -9,7 +9,7 @@ class SurveySession(models.Model):
     STEP_DONE = "done"
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="survey_session")
-    batch = models.ForeignKey("experiments.ExperimentBatch", on_delete=models.PROTECT, related_name="sessions")
+    batch = models.ForeignKey("experiments.ExperimentBatch", on_delete=models.SET_NULL, null=True, blank=True, related_name="sessions")
     language = models.CharField("界面语言", max_length=12, default="zh-hans")
     topic_order_snapshot = models.JSONField("话题初始随机快照", default=list)
     submitted_topic_order = models.JSONField("参与者排序", default=list, blank=True)

@@ -18,6 +18,125 @@
     box-shadow: 0 12px 30px rgba(15, 20, 25, .07);
   }
 
+  .batch-switcher {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+    padding: 14px 18px;
+    background: rgba(29, 161, 242, .08);
+    border: 1px solid rgba(29, 161, 242, .25);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+
+  .batch-switcher label {
+    font-weight: 700;
+    color: #0a73b8;
+    margin: 0;
+  }
+
+  .batch-switcher select {
+    flex: 1;
+    max-width: 360px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(83, 100, 113, .25);
+    font-size: 14px;
+  }
+
+  .batch-switcher button {
+    padding: 7px 18px;
+    background: #1da1f2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .batch-switcher button:hover {
+    background: #0a8ddb;
+  }
+
+  .batch-add-button {
+    padding: 7px 14px;
+    background: #00ba7c;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 13px;
+  }
+
+  .batch-add-button:hover {
+    background: #009463;
+    color: #fff;
+  }
+
+  .batch-delete-button {
+    padding: 7px 14px;
+    background: #b3261e;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 13px;
+  }
+
+  .batch-delete-button:hover {
+    background: #8f1d17;
+    color: #fff;
+  }
+
+  .register-batch-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    background: rgba(0, 186, 124, .08);
+    border: 1px solid rgba(0, 186, 124, .3);
+    border-radius: 10px;
+    flex-wrap: wrap;
+  }
+
+  .register-batch-banner select {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(83, 100, 113, .25);
+    font-size: 14px;
+    min-width: 200px;
+  }
+
+  .register-batch-banner button {
+    padding: 7px 16px;
+    background: #00ba7c;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    margin-left: 8px;
+  }
+
+  .register-batch-banner button:hover {
+    background: #009463;
+  }
+
+  .batch-switcher .current-badge {
+    margin-left: auto;
+    padding: 4px 10px;
+    background: #0a73b8;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
   .research-hero h1 {
     margin: 0 0 8px;
     font-size: 30px;
@@ -90,18 +209,53 @@
 <div class="research-shell">
   <section class="research-hero">
     <h1>研究管理台</h1>
-    <p>集中管理实验说明、话题材料、参与用户、模型 API 与 Prompt 设置。</p>
+    <p>用户数据展示全部参与者（含所属批次）；实验配置按下方选定的批次进行管理。</p>
   </section>
 
   <section class="research-section" aria-label="用户数据">
     <h2>用户数据</h2>
     <div class="research-actions">
-      <a class="research-action" href="{{ users_url }}"><b>用户数据</b><span>查看用户进度、英文论文倒计时、具体答题数据，并导出 CSV。</span></a>
+      <a class="research-action" href="{{ users_url }}"><b>用户数据</b><span>查看所有参与者的进度、所属批次、英文论文倒计时、具体答题数据，并导出 CSV。</span></a>
     </div>
   </section>
 
   <section class="research-section" aria-label="管理入口">
     <h2>实验配置</h2>
+    <div class="register-batch-banner">
+      <div>
+        <strong>自助注册默认批次：</strong>
+        {% if register_batch %}
+          <span style="color:#087a55; font-weight:700;">{{ register_batch.name }}</span>
+        {% else %}
+          <span style="color:#b3261e; font-weight:700;">未设置（用户无法自助注册）</span>
+        {% endif %}
+        <p style="margin:4px 0 0; color:#536471; font-size:13px;">仅影响 <code>/profile/register/</code> 自助注册时绑定的批次；其他批次的用户登录、做实验、批量注册都不受影响。</p>
+      </div>
+      <form method="post" action="{{ set_register_batch_url }}" data-auto-submit>
+        {% csrf_token %}
+        <select name="batch_id" data-auto-submit-trigger>
+          {% for option in available_batches %}
+            <option value="{{ option.pk }}" {% if register_batch and option.pk == register_batch.pk %}selected{% endif %}>{{ option.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+    <form method="post" action="{{ select_batch_url }}" class="batch-switcher" data-auto-submit>
+      {% csrf_token %}
+      <label for="batch-select">当前管理批次：</label>
+      <select id="batch-select" name="batch_id" data-auto-submit-trigger>
+        {% for option in available_batches %}
+          <option value="{{ option.pk }}" {% if option.pk == batch.pk %}selected{% endif %}>
+            {{ option.name }}{% if option.is_active %}（自助注册批次）{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <a class="batch-add-button" href="{{ add_batch_url }}">+ 新建批次</a>
+      {% if can_delete_batch %}
+        <a class="batch-delete-button" href="{{ delete_batch_url }}">🗑 删除当前批次</a>
+      {% endif %}
+      <span class="current-badge">{{ batch.name }} · {{ topic_count }} 话题 · {{ ai_mode_count }} AI 模式</span>
+    </form>
     <div class="research-actions">
     <a class="research-action" href="{{ copy_url }}"><b>说明文字</b><span>编辑第一步说明，以及英文论文写作要求和时长。</span></a>
     <a class="research-action" href="{{ topics_url }}"><b>话题</b><span>编辑每个话题、帖子正文和配套评论。</span></a>
@@ -110,4 +264,12 @@
     </div>
   </section>
 </div>
+<script>
+  document.querySelectorAll("[data-auto-submit-trigger]").forEach(function (el) {
+    el.addEventListener("change", function () {
+      const form = el.closest("form[data-auto-submit]");
+      if (form) form.submit();
+    });
+  });
+</script>
 {% endblock %}

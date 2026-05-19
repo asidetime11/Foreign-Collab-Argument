@@ -1,11 +1,28 @@
 from django import forms
 from django.contrib import admin, messages
 from django.db import models
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import path, reverse
 
-from .admin_views import default_batch
-from .models import AIMode, APIKey, LLMProvider, SystemAPIConfig, Topic, TopicComment
+from .admin_views import default_batch, selected_batch
+from .models import AIMode, APIKey, ExperimentBatch, LLMProvider, SystemAPIConfig, Topic, TopicComment
+
+
+@admin.register(ExperimentBatch)
+class ExperimentBatchAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active", "topic_count", "ai_chat_minutes", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name",)
+    fieldsets = (
+        ("基本信息", {"fields": ("name", "is_active")}),
+        ("文案", {"fields": ("intro_zh", "intro_en", "outro_zh", "outro_en")}),
+        ("英文论文", {"fields": ("english_paper_prompt", "english_paper_duration_hours")}),
+        ("实验参数", {"fields": ("ai_chat_minutes", "ai_neutrality", "topic_selection_strategy", "round_order_strategy")}),
+    )
+
+    def topic_count(self, obj):
+        return obj.topics.count()
+    topic_count.short_description = "话题数"
 
 
 class LLMProviderForm(forms.ModelForm):
@@ -116,19 +133,86 @@ class TopicCommentInline(admin.TabularInline):
 
 @admin.register(Topic)
 class TopicAdmin(admin.ModelAdmin):
-    list_display = ("title_zh", "is_enabled", "position")
+    list_display = ("title_zh", "batch_list", "is_enabled", "position")
+    list_filter = ("is_enabled",)
     actions = None
     search_fields = ("title_zh", "title_en")
+    filter_horizontal = ("batches",)
+    change_list_template = "admin/experiments/topic_changelist.html"
     fieldsets = (
-        ("话题", {"fields": ("title_zh", "title_en", "is_enabled", "position")}),
+        ("话题", {"fields": ("batches", "title_zh", "title_en", "is_enabled", "position")}),
         ("帖子与观点", {"fields": ("statement_zh", "statement_en", "post_body_zh", "post_body_en")}),
     )
     inlines = [TopicCommentInline]
 
-    def save_model(self, request, obj, form, change):
-        if not obj.batch_id:
-            obj.batch = default_batch()
-        super().save_model(request, obj, form, change)
+    def get_queryset(self, request):
+        qs = super().get_queryset(request).prefetch_related("batches")
+        batch = selected_batch(request)
+        return qs.filter(batches=batch).distinct()
+
+    def batch_list(self, obj):
+        names = list(obj.batches.values_list("name", flat=True))
+        return "、".join(names) if names else "—"
+    batch_list.short_description = "所属批次"
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["current_batch"] = selected_batch(request)
+        extra_context["import_url"] = reverse("admin:experiments_topic_import_from_batch")
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if not form.instance.batches.exists():
+            form.instance.batches.add(selected_batch(request))
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "import-from-batch/",
+                self.admin_site.admin_view(self.import_from_batch),
+                name="experiments_topic_import_from_batch",
+            ),
+        ]
+        return custom + urls
+
+    def import_from_batch(self, request):
+        current = selected_batch(request)
+        if request.method == "POST":
+            topic_ids = request.POST.getlist("topic_ids")
+            topics = Topic.objects.filter(pk__in=topic_ids)
+            for topic in topics:
+                topic.batches.add(current)
+            self.message_user(
+                request,
+                f"已从其他批次导入 {topics.count()} 个话题到「{current.name}」。",
+                level=messages.SUCCESS,
+            )
+            return redirect("admin:experiments_topic_changelist")
+        candidates = (
+            Topic.objects.exclude(batches=current)
+            .prefetch_related("batches")
+            .order_by("title_zh")
+        )
+        grouped = {}
+        for topic in candidates:
+            for batch in topic.batches.all():
+                grouped.setdefault(batch, []).append(topic)
+        groups = [
+            {"batch": batch, "topics": topics}
+            for batch, topics in sorted(grouped.items(), key=lambda kv: kv[0].pk)
+        ]
+        return render(
+            request,
+            "admin/experiments/topic_import_from_batch.html",
+            {
+                "title": f"从其他批次导入话题 → 「{current.name}」",
+                "current_batch": current,
+                "groups": groups,
+                "has_candidates": bool(groups),
+            },
+        )
 
 
 class APIKeyInline(admin.TabularInline):
@@ -451,12 +535,14 @@ class SystemAPIConfigAdmin(admin.ModelAdmin):
 
 @admin.register(AIMode)
 class AIModeAdmin(admin.ModelAdmin):
-    list_display = ("name_zh", "is_enabled", "position")
+    list_display = ("name_zh", "batch", "is_enabled", "position")
+    list_filter = ("is_enabled",)
     actions = None
     search_fields = ("name_zh", "prompt_zh")
+    change_list_template = "admin/experiments/aimode_changelist.html"
     fieldsets = (
         ("基本信息", {
-            "fields": ("name_zh", "name_en", "is_enabled", "position"),
+            "fields": ("batch", "name_zh", "name_en", "is_enabled", "position"),
             "description": "AI模式的基本配置"
         }),
         ("Prompt 配置", {
@@ -468,8 +554,81 @@ class AIModeAdmin(admin.ModelAdmin):
         models.TextField: {"widget": forms.Textarea(attrs={"rows": 8, "cols": 80})},
     }
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(batch=selected_batch(request))
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["current_batch"] = selected_batch(request)
+        extra_context["import_url"] = reverse("admin:experiments_aimode_import_from_batch")
+        return super().changelist_view(request, extra_context=extra_context)
+
     def save_model(self, request, obj, form, change):
         if not obj.batch_id:
-            obj.batch = default_batch()
+            obj.batch = selected_batch(request)
         super().save_model(request, obj, form, change)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "import-from-batch/",
+                self.admin_site.admin_view(self.import_from_batch),
+                name="experiments_aimode_import_from_batch",
+            ),
+        ]
+        return custom + urls
+
+    def import_from_batch(self, request):
+        current = selected_batch(request)
+        if request.method == "POST":
+            mode_ids = request.POST.getlist("mode_ids")
+            modes = AIMode.objects.filter(pk__in=mode_ids)
+            created = 0
+            skipped = 0
+            for mode in modes:
+                if AIMode.objects.filter(batch=current, name_zh=mode.name_zh).exists():
+                    skipped += 1
+                    continue
+                AIMode.objects.create(
+                    batch=current,
+                    name_zh=mode.name_zh,
+                    name_en=mode.name_en,
+                    prompt_zh=mode.prompt_zh,
+                    prompt_en=mode.prompt_en,
+                    position=mode.position,
+                    is_enabled=mode.is_enabled,
+                )
+                created += 1
+            msg = f"已复制 {created} 个 AI 模式到「{current.name}」。"
+            if skipped:
+                msg += f"（{skipped} 个因同名已存在被跳过）"
+            self.message_user(request, msg, level=messages.SUCCESS)
+            return redirect("admin:experiments_aimode_changelist")
+        candidates = (
+            AIMode.objects.exclude(batch=current)
+            .select_related("batch")
+            .order_by("batch__id", "position", "id")
+        )
+        existing_names = set(AIMode.objects.filter(batch=current).values_list("name_zh", flat=True))
+        grouped = {}
+        for mode in candidates:
+            grouped.setdefault(mode.batch, []).append({
+                "obj": mode,
+                "duplicate": mode.name_zh in existing_names,
+            })
+        groups = [
+            {"batch": batch, "modes": modes}
+            for batch, modes in sorted(grouped.items(), key=lambda kv: kv[0].pk)
+        ]
+        return render(
+            request,
+            "admin/experiments/aimode_import_from_batch.html",
+            {
+                "title": f"从其他批次复制 AI 模式 → 「{current.name}」",
+                "current_batch": current,
+                "groups": groups,
+                "has_candidates": bool(groups),
+            },
+        )
 

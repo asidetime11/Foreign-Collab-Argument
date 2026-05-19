@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+{% block content_title %}<h1>{{ title }}</h1>{% endblock %}
+{% block content %}
+<style>
+  .delete-batch-shell { max-width: 720px; }
+  .danger-box { border: 1px solid #b3261e; background: rgba(179, 38, 30, .06); border-radius: 10px; padding: 18px 22px; margin-bottom: 18px; }
+  .danger-box h2 { margin: 0 0 8px; color: #b3261e; font-size: 18px; }
+  .impact-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .impact-table th, .impact-table td { padding: 10px 14px; border-bottom: 1px solid #e8eaed; text-align: left; }
+  .impact-table th { background: #f7f9fc; }
+  .delete-yes { color: #b3261e; font-weight: 700; }
+  .delete-no { color: #087a55; font-weight: 700; }
+  .danger-btn { background: #b3261e; color: #fff; border: 0; padding: 10px 22px; border-radius: 6px; font-weight: 700; cursor: pointer; }
+  .danger-btn:hover { background: #8f1d17; }
+  .danger-btn:disabled { background: #ccc; cursor: not-allowed; }
+</style>
+<div class="delete-batch-shell">
+  <section class="danger-box">
+    <h2>确认删除批次「{{ batch.name }}」？</h2>
+    <p>删除后<strong>不可恢复</strong>。已经报名/参与的用户和他们的答题数据<strong>不会被删除</strong>，但会从这个批次解绑（变成"无批次"，可以之后手动重新分配）。</p>
+  </section>
+
+  <h3>这次操作将会发生：</h3>
+  <table class="impact-table">
+    <thead>
+      <tr><th>对象</th><th>数量</th><th>处理方式</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>关联的参与者用户</td>
+        <td>{{ participants_count }}</td>
+        <td class="delete-no">保留用户，仅解除批次绑定</td>
+      </tr>
+      <tr>
+        <td>关联的会话和答题数据</td>
+        <td>{{ sessions_count }}</td>
+        <td class="delete-no">保留数据，仅解除批次绑定</td>
+      </tr>
+      <tr>
+        <td>话题（M2M 共享）</td>
+        <td>{{ topics_unlink_count }}</td>
+        <td class="delete-no">保留话题，仅解除归属</td>
+      </tr>
+      <tr>
+        <td>AI 模式 / Prompt</td>
+        <td>{{ ai_modes_count }}</td>
+        <td class="delete-yes">永久删除</td>
+      </tr>
+      <tr>
+        <td>量表题目</td>
+        <td>{{ scale_items_count }}</td>
+        <td class="delete-yes">永久删除</td>
+      </tr>
+      <tr>
+        <td>批次说明文字 / 评分配置</td>
+        <td>1</td>
+        <td class="delete-yes">永久删除</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if is_last_batch %}
+    <p style="color:#b3261e; font-weight:700;">⚠ 这是系统中最后一个批次，无法删除（至少需要保留一个）。</p>
+    <a href="{% url 'research_admin_dashboard' %}" class="button">返回</a>
+  {% else %}
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit" class="danger-btn" onclick="return confirm('真的要删除批次「{{ batch.name }}」吗？此操作不可撤销。');">确认删除批次</button>
+      <a href="{% url 'research_admin_dashboard' %}" class="button" style="margin-left:10px;">取消</a>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

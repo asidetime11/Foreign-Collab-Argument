@@ -182,16 +182,22 @@ async def _async_get_client_for_provider(provider):
 
 async def async_chat_stream(messages, provider):
     attempts = 2
+    t0 = time.monotonic()
     client, model_name = await _async_get_client_for_provider(provider)
+    t1 = time.monotonic()
+    print(f"[ttft] client built dt={t1-t0:.3f}s base_url={provider.base_url} model={model_name}", flush=True)
 
     stream = None
     for attempt in range(attempts):
         try:
+            t2 = time.monotonic()
             stream = await client.chat.completions.create(
                 model=model_name,
                 messages=messages,
                 stream=True,
             )
+            t3 = time.monotonic()
+            print(f"[ttft] create() returned dt={t3-t2:.3f}s (attempt={attempt})", flush=True)
             break
         except Exception as exc:
             if attempt == attempts - 1 or not _is_retryable_busy_error(exc):

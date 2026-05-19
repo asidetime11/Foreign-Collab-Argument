@@ -39,10 +39,9 @@ class Command(BaseCommand):
         RatingScaleConfig.objects.get_or_create(batch=batch)
         for index, (title_zh, title_en) in enumerate(DEFAULT_TOPICS, start=1):
             topic, _ = Topic.objects.get_or_create(
-                batch=batch,
+                title_zh=title_zh,
                 position=index,
                 defaults={
-                    "title_zh": title_zh,
                     "title_en": title_en,
                     "post_body_zh": f"围绕“{title_zh}”，不同人可能会有不同判断。请阅读下面的评论。",
                     "post_body_en": f"People may judge '{title_en}' differently. Please read the comments below.",
@@ -50,6 +49,7 @@ class Command(BaseCommand):
                     "statement_en": title_en,
                 },
             )
+            topic.batches.add(batch)
             for c_index in range(1, 4):
                 TopicComment.objects.get_or_create(
                     topic=topic,
