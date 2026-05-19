@@ -49,6 +49,78 @@ python manage.py check
 4. 参与者首次登录后填写“称呼/姓名”，再进入答题流程。
 5. 在“实验批次”列表点击“导出数据”，选择数据类型和 Excel/CSV 格式下载。
 
+## Server Deployment
+
+项目使用 Docker Compose 部署，包含 Django/Gunicorn 应用容器和 Nginx 反向代理容器。
+
+### 前置条件
+
+- 服务器已安装 Docker 和 Docker Compose
+- 已将代码克隆到服务器
+
+### 部署步骤
+
+**1. 准备环境变量**
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env`，至少设置以下生产环境配置：
+
+```env
+DJANGO_SECRET_KEY=<随机长字符串>
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS=<服务器IP或域名>
+```
+
+**2. 构建并启动服务**
+
+```bash
+docker compose up -d --build
+```
+
+首次启动后执行数据库初始化：
+
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed_defaults
+docker compose exec web python manage.py createsuperuser
+```
+
+**3. 访问服务**
+
+- 参与者端：`http://<服务器IP>/survey/`
+- 管理后台：`http://<服务器IP>/admin/`
+
+### 架构说明
+
+| 容器 | 镜像 | 说明 |
+|------|------|------|
+| `web` | 本地构建（`python:3.12-slim`） | Gunicorn + UvicornWorker，监听 8000 端口 |
+| `nginx` | `nginx:alpine` | 反向代理，对外暴露 80 端口，同时提供静态文件服务 |
+
+数据持久化通过两个 Docker volume 实现：
+- `sqlite_data`：SQLite 数据库文件（挂载到 `/app/data/`）
+- `static_files`：Django 静态文件（`collectstatic` 输出）
+
+### 常用运维命令
+
+```bash
+# 查看日志
+docker compose logs -f web
+
+# 重启服务
+docker compose restart web
+
+# 更新代码后重新部署
+git pull
+docker compose up -d --build
+
+# 备份数据库
+docker compose cp web:/app/data/db.sqlite3 ./backup_$(date +%Y%m%d).sqlite3
+```
+
 ## Notes
 
 - 每一步由后端状态机控制，提交后不可返回修改。

@@ -302,6 +302,7 @@
         <tr>
           <th class="select-cell"><input class="records-check" type="checkbox" id="select-all-users" aria-label="选择全部用户"></th>
           <th>用户名</th>
+          <th>所属批次</th>
           <th>称呼/姓名</th>
           <th>账号状态</th>
           <th>当前步骤</th>
@@ -321,6 +322,7 @@
                 {% endif %}
               </td>
               <td><a class="user-link" href="{% url 'research_admin_user_detail' row.user.pk %}">{{ row.user.username }}</a></td>
+              <td>{{ row.batch_name }}</td>
               <td>{{ row.display_name|default:"-" }}</td>
               <td>
                 <span class="status-badge{% if row.status == '未开始' %} idle{% elif row.status == '已完成' %} done{% endif %}">{{ row.status }}</span>
@@ -344,7 +346,7 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="10">还没有参与者账号。</td></tr>
+            <tr><td colspan="11">还没有参与者账号。</td></tr>
           {% endfor %}
         </tbody>
       </table>

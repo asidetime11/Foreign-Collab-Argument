@@ -9,6 +9,9 @@ from apps.experiments import admin_views as research_admin_views
 
 urlpatterns = [
     path("admin/research/", research_admin_views.dashboard, name="research_admin_dashboard"),
+    path("admin/research/select-batch/", research_admin_views.select_batch, name="research_admin_select_batch"),
+    path("admin/research/set-register-batch/", research_admin_views.set_register_batch, name="research_admin_set_register_batch"),
+    path("admin/research/delete-batch/<int:batch_id>/", research_admin_views.delete_batch, name="research_admin_delete_batch"),
     path("admin/research/copy/", research_admin_views.copy_settings, name="research_admin_copy"),
     path("admin/research/bulk-register/", research_admin_views.bulk_register, name="research_admin_bulk_register"),
     path("admin/research/users/", research_admin_views.user_records, name="research_admin_users"),

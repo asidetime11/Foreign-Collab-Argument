@@ -126,6 +126,12 @@ class PageCopyForm(forms.ModelForm):
 
 
 class BulkRegisterForm(forms.Form):
+    batch = forms.ModelChoiceField(
+        queryset=ExperimentBatch.objects.order_by("id"),
+        label="加入批次",
+        help_text="新创建的用户将归属到选定的批次。",
+        widget=forms.Select(attrs={"class": "bulk-input"}),
+    )
     initial_password = forms.CharField(
         label="初始密码",
         min_length=5,
@@ -173,6 +179,101 @@ def default_batch():
     return ExperimentBatch.objects.create(name="默认实验", is_active=True)
 
 
+SELECTED_BATCH_SESSION_KEY = "selected_admin_batch_id"
+
+
+def selected_batch(request):
+    batch_id = request.session.get(SELECTED_BATCH_SESSION_KEY)
+    if batch_id:
+        batch = ExperimentBatch.objects.filter(pk=batch_id).first()
+        if batch:
+            return batch
+    batch = default_batch()
+    request.session[SELECTED_BATCH_SESSION_KEY] = batch.pk
+    return batch
+
+
+@staff_member_required
+@require_POST
+def select_batch(request):
+    batch_id = request.POST.get("batch_id")
+    if not batch_id:
+        messages.error(request, "未选择批次。")
+        return redirect("research_admin_dashboard")
+    batch = ExperimentBatch.objects.filter(pk=batch_id).first()
+    if not batch:
+        messages.error(request, "批次不存在。")
+        return redirect("research_admin_dashboard")
+    request.session[SELECTED_BATCH_SESSION_KEY] = batch.pk
+    messages.success(request, f"已切换到批次：{batch.name}")
+    next_url = request.POST.get("next") or reverse("research_admin_dashboard")
+    return redirect(next_url)
+
+
+@staff_member_required
+@require_POST
+def set_register_batch(request):
+    batch_id = request.POST.get("batch_id")
+    batch = ExperimentBatch.objects.filter(pk=batch_id).first()
+    if not batch:
+        messages.error(request, "批次不存在。")
+        return redirect("research_admin_dashboard")
+    # 全局唯一 active：把其他所有 batch 设为 inactive，仅当前 batch 为 active
+    ExperimentBatch.objects.exclude(pk=batch.pk).update(is_active=False)
+    if not batch.is_active:
+        batch.is_active = True
+        batch.save(update_fields=["is_active"])
+    messages.success(request, f"已设置「{batch.name}」为接收新用户注册的批次。")
+    return redirect("research_admin_dashboard")
+
+
+@staff_member_required
+def delete_batch(request, batch_id):
+    batch = get_object_or_404(ExperimentBatch, pk=batch_id)
+    participants_count = batch.participants.count()
+    sessions_count = batch.sessions.count()
+    ai_modes_count = batch.ai_modes.count()
+    scale_items_count = batch.scale_items.count()
+    topics_unlink_count = batch.topics.count()
+
+    if request.method == "POST":
+        if ExperimentBatch.objects.count() <= 1:
+            messages.error(request, "至少需要保留一个批次，无法删除最后一个。")
+            return redirect("research_admin_dashboard")
+        batch_name = batch.name
+        # 解绑用户和 session（不删用户、不删答题数据）
+        batch.participants.update(batch=None)
+        batch.sessions.update(batch=None)
+        # 解绑 topic（topic 本身保留，可能还属于其他 batch）
+        batch.topics.clear()
+        # 删 batch 本身（CASCADE 会自动删 AIMode/ScaleItem/RatingScaleConfig）
+        batch.delete()
+        # 清掉 session 里指向已删 batch 的引用
+        if request.session.get(SELECTED_BATCH_SESSION_KEY) == batch_id:
+            request.session.pop(SELECTED_BATCH_SESSION_KEY, None)
+        messages.success(
+            request,
+            f"已删除批次「{batch_name}」。{participants_count} 个用户和 {sessions_count} 个会话已解绑到「无批次」，数据保留。",
+        )
+        return redirect("research_admin_dashboard")
+
+    return render(
+        request,
+        "admin/research/delete_batch.html",
+        {
+            "title": f"删除批次「{batch.name}」",
+            "batch": batch,
+            "participants_count": participants_count,
+            "sessions_count": sessions_count,
+            "ai_modes_count": ai_modes_count,
+            "scale_items_count": scale_items_count,
+            "topics_unlink_count": topics_unlink_count,
+            "is_last_batch": ExperimentBatch.objects.count() <= 1,
+        },
+    )
+
+
+
 def _parse_started_at(raw_value):
     if not raw_value:
         return None
@@ -210,13 +311,16 @@ def english_paper_countdown(session):
 
 @staff_member_required
 def dashboard(request):
-    batch = default_batch()
+    batch = selected_batch(request)
     user_count = batch.participants.count()
     completed_count = batch.sessions.filter(completed_at__isnull=False).count()
+    register_batch = ExperimentBatch.objects.filter(is_active=True).order_by("id").first()
     context = {
         "title": "研究管理台",
         "batch": batch,
-        "topic_count": Topic.objects.filter(batch=batch).count(),
+        "register_batch": register_batch,
+        "available_batches": ExperimentBatch.objects.order_by("id"),
+        "topic_count": Topic.objects.filter(batches=batch).count(),
         "ai_mode_count": AIMode.objects.filter(batch=batch).count(),
         "user_count": user_count,
         "completed_count": completed_count,
@@ -226,13 +330,18 @@ def dashboard(request):
         "system_api_url": reverse("admin:experiments_systemapiconfig_changelist"),
         "llm_providers_url": reverse("admin:experiments_llmprovider_changelist"),
         "users_url": reverse("research_admin_users"),
+        "select_batch_url": reverse("research_admin_select_batch"),
+        "add_batch_url": reverse("admin:experiments_experimentbatch_add"),
+        "delete_batch_url": reverse("research_admin_delete_batch", args=[batch.pk]),
+        "set_register_batch_url": reverse("research_admin_set_register_batch"),
+        "can_delete_batch": ExperimentBatch.objects.count() > 1,
     }
     return render(request, "admin/research/dashboard.html", context)
 
 
 @staff_member_required
 def copy_settings(request):
-    batch = default_batch()
+    batch = selected_batch(request)
     if request.method == "POST":
         form = PageCopyForm(request.POST, instance=batch)
         if form.is_valid():
@@ -240,15 +349,14 @@ def copy_settings(request):
             return redirect("research_admin_dashboard")
     else:
         form = PageCopyForm(instance=batch)
-    return render(request, "admin/research/copy_settings.html", {"title": "说明文字", "form": form})
+    return render(request, "admin/research/copy_settings.html", {"title": "说明文字", "form": form, "batch": batch})
 
 
 @staff_member_required
 def user_records(request):
-    batch = default_batch()
     profiles = (
-        ParticipantProfile.objects.filter(batch=batch)
-        .select_related("user", "user__survey_session")
+        ParticipantProfile.objects.all()
+        .select_related("user", "user__survey_session", "batch")
         .prefetch_related("user__survey_session__rounds")
         .order_by("user__username")
     )
@@ -280,6 +388,7 @@ def user_records(request):
             {
                 "user": profile.user,
                 "display_name": profile.display_name,
+                "batch_name": profile.batch.name if profile.batch else "—",
                 "status": status,
                 "current_step": current_step,
                 "round_count": round_count,
@@ -300,17 +409,16 @@ def user_records(request):
 
 @staff_member_required
 def user_detail(request, user_id):
-    batch = default_batch()
     profile = get_object_or_404(
         ParticipantProfile.objects.select_related("user", "batch"),
         user_id=user_id,
-        batch=batch,
     )
+    batch = profile.batch
     session = getattr(profile.user, "survey_session", None)
     rounds = list(session.rounds.all()) if session else []
     topic_titles = {
         topic.pk: topic.title_zh or topic.title_en
-        for topic in Topic.objects.filter(batch=batch, pk__in=[round_obj.topic_id for round_obj in rounds])
+        for topic in Topic.objects.filter(pk__in=[round_obj.topic_id for round_obj in rounds])
     }
     scale_responses = ScaleResponse.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id")
     text_responses = TextResponse.objects.filter(round__in=rounds).select_related("round").order_by("submitted_at", "id")
@@ -434,9 +542,8 @@ def user_detail(request, user_id):
     return render(request, "admin/research/user_detail.html", context)
 
 
-def deletable_participants():
+def deletable_participants(request):
     return User.objects.filter(
-        participant_profile__batch=default_batch(),
         is_staff=False,
         is_superuser=False,
     )
@@ -445,7 +552,7 @@ def deletable_participants():
 @staff_member_required
 @require_POST
 def delete_user(request, user_id):
-    queryset = deletable_participants().filter(pk=user_id)
+    queryset = deletable_participants(request).filter(pk=user_id)
     user_count = queryset.count()
     queryset.delete()
     if user_count:
@@ -459,7 +566,7 @@ def delete_user(request, user_id):
 @require_POST
 def delete_users(request):
     user_ids = request.POST.getlist("user_ids")
-    queryset = deletable_participants().filter(pk__in=user_ids)
+    queryset = deletable_participants(request).filter(pk__in=user_ids)
     user_count = queryset.count()
     queryset.delete()
     if user_count:
@@ -471,11 +578,13 @@ def delete_users(request):
 
 @staff_member_required
 def bulk_register(request):
+    current = selected_batch(request)
     if request.method == "POST":
         form = BulkRegisterForm(request.POST)
         if form.is_valid():
             password = form.cleaned_data["initial_password"]
             usernames = form.cleaned_data["usernames"]
+            batch = form.cleaned_data["batch"]
             stamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
             if request.POST.get("action") == "export":
                 payload = build_bulk_register_excel(request, usernames, password)
@@ -485,16 +594,15 @@ def bulk_register(request):
                 )
                 response["Content-Disposition"] = f'attachment; filename="participant-accounts-{stamp}.xlsx"'
                 return response
-            batch = default_batch()
             for username in usernames:
                 user = User.objects.create_user(username=username, password=password)
                 user.participant_profile.batch = batch
                 user.participant_profile.save(update_fields=["batch"])
-            messages.success(request, f"已创建 {len(usernames)} 个参与者账号。")
+            messages.success(request, f"已创建 {len(usernames)} 个参与者账号到批次「{batch.name}」。")
             return redirect("research_admin_users")
     else:
-        form = BulkRegisterForm()
-    return render(request, "admin/research/bulk_register.html", {"title": "批量注册新用户", "form": form})
+        form = BulkRegisterForm(initial={"batch": current})
+    return render(request, "admin/research/bulk_register.html", {"title": "批量注册新用户", "form": form, "batch": current})
 
 
 def build_bulk_register_excel(request, usernames, password):

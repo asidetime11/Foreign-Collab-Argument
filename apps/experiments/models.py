@@ -36,7 +36,13 @@ class ExperimentBatch(models.Model):
 
 
 class Topic(models.Model):
-    batch = models.ForeignKey(ExperimentBatch, on_delete=models.CASCADE, related_name="topics", verbose_name="批次")
+    batches = models.ManyToManyField(
+        ExperimentBatch,
+        related_name="topics",
+        verbose_name="所属批次",
+        blank=True,
+        help_text="一个话题可以同时属于多个批次。",
+    )
     title_zh = models.CharField("话题标题（中文）", max_length=200)
     title_en = models.CharField("话题标题（英文）", max_length=200, blank=True)
     is_enabled = models.BooleanField("启用", default=True)

@@ -20,7 +20,7 @@ class ParticipantProfile(models.Model):
     notes = models.TextField("备注", blank=True)
     batch = models.ForeignKey(
         "experiments.ExperimentBatch",
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="participants",

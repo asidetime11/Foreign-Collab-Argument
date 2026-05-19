@@ -128,6 +128,9 @@ async def chat(request, round_id):
         if not providers:
             errors.append(ImproperlyConfigured(AI_CONFIGURATION_ERROR))
 
+        stream_start = time.monotonic()
+        print(f"[ttft] event_stream begin t=0.000s providers={len(providers)} prior_messages={len(prior_messages)}", flush=True)
+
         for provider in providers:
             model_name = await _async_provider_display_model(provider)
             assistant_message = None
@@ -142,6 +145,8 @@ async def chat(request, round_id):
                     first = None
 
                 if first is not None:
+                    elapsed = time.monotonic() - stream_start
+                    print(f"[ttft] first chunk received t={elapsed:.3f}s model={getattr(provider, '_last_model_name', model_name)} preview={first[:30]!r}", flush=True)
                     model_name = getattr(provider, "_last_model_name", model_name)
                     assistant_message = await ConversationMessage.objects.acreate(
                         round=round_obj,
