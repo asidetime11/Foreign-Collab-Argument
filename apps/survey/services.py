@@ -44,7 +44,7 @@ def get_or_create_session(user, language="zh-hans"):
 
 
 def _batch_snapshot(batch: ExperimentBatch):
-    return {
+    snapshot = {
         "id": batch.pk,
         "name": batch.name,
         "intro_zh": batch.intro_zh,
@@ -56,6 +56,10 @@ def _batch_snapshot(batch: ExperimentBatch):
         "english_paper_prompt": batch.english_paper_prompt,
         "english_paper_duration_hours": batch.english_paper_duration_hours,
     }
+    for i in range(1, 7):
+        snapshot[f"agreement_label_{i}"] = getattr(batch, f"agreement_label_{i}", "")
+        snapshot[f"confidence_label_{i}"] = getattr(batch, f"confidence_label_{i}", "")
+    return snapshot
 
 
 def _topic_snapshots(batch: ExperimentBatch):

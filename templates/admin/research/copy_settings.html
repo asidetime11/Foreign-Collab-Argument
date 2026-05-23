@@ -3,125 +3,186 @@
 {% block extrastyle %}
 {{ block.super }}
 <style>
-  .admin-module-shell {
-    display: grid;
-    gap: 18px;
-    max-width: 980px;
-  }
-
-  .admin-module-hero,
-  .admin-module-card {
+  .copy-shell { display: grid; gap: 16px; }
+  .copy-toolbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 16px;
+    background: #fff;
     border: 1px solid rgba(83, 100, 113, .16);
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(15, 20, 25, .06);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(15, 20, 25, .05);
   }
-
-  .admin-module-hero {
-    display: flex;
-    justify-content: space-between;
-    gap: 18px;
-    align-items: center;
-    padding: 24px 26px;
-    background: linear-gradient(135deg, #fff 0%, #f3f8fc 100%);
-    border-left: 6px solid #1da1f2;
+  .copy-toolbar .group { display: inline-flex; align-items: center; gap: 8px; }
+  .copy-toolbar select {
+    padding: 6px 10px; border: 1px solid #d0d7de; border-radius: 6px;
+    background: #fff; font: inherit;
   }
-
-  .admin-module-hero h1 {
-    margin: 0 0 8px;
-    font-size: 28px;
+  .lang-tabs { display: inline-flex; border: 1px solid #d0d7de; border-radius: 999px; overflow: hidden; }
+  .lang-tabs button {
+    border: 0; background: #fff; color: #57606a;
+    padding: 6px 18px; cursor: pointer; font-weight: 600; font-size: 13px;
   }
-
-  .admin-module-hero p {
-    margin: 0;
-    color: #536471;
-    line-height: 1.8;
+  .lang-tabs button.active { background: #0a73b8; color: #fff; }
+  .copy-stage {
+    background: #f5f8fa;
+    border: 1px solid rgba(83, 100, 113, .16);
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 720px;
+    box-shadow: 0 6px 18px rgba(15, 20, 25, .05);
   }
-
-  .admin-module-card {
-    display: grid;
-    gap: 18px;
-    padding: 24px 26px;
+  .copy-stage iframe { width: 100%; height: 720px; border: 0; display: block; background: #fff; }
+  .copy-status {
+    margin-left: auto;
+    color: #6a737d; font-size: 13px;
   }
-
-  .copy-field {
-    display: grid;
-    gap: 10px;
+  .copy-status.dirty { color: #b08800; }
+  .copy-status.saving { color: #0a73b8; }
+  .copy-save-btn {
+    background: #0a73b8; color: #fff; border: none;
+    padding: 8px 22px; border-radius: 6px; cursor: pointer; font-weight: 600;
   }
-
-  .copy-label {
-    color: #0f1419;
-    font-size: 16px;
-    font-weight: 800;
-  }
-
-  .copy-help {
-    margin: 0;
-    color: #536471;
-    line-height: 1.7;
-  }
-
-  .copy-textarea {
-    width: 100%;
-    min-height: 180px;
-    box-sizing: border-box;
-    padding: 14px 16px;
-    border: 1px solid #d8e2ea;
-    border-radius: 8px;
-    background: #fff;
-    color: #0f1419;
-    font-size: 15px;
-    line-height: 1.7;
-    resize: vertical;
-  }
-
-  .copy-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 4px;
-  }
-
-  @media (max-width: 760px) {
-    .admin-module-hero {
-      align-items: flex-start;
-      flex-direction: column;
-    }
+  .copy-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .copy-helper {
+    font-size: 12px; color: #6a737d;
+    padding: 8px 12px; background: #fff;
+    border: 1px solid rgba(83, 100, 113, .16); border-radius: 8px;
   }
 </style>
 {% endblock %}
 {% block content %}
-<div class="admin-module-shell">
-  <section class="admin-module-hero">
-    <div>
-      <h1>说明文字</h1>
-      <p>分别维护参与者进入排序页前看到的说明，以及英文论文写作页的任务要求。</p>
+<div class="copy-shell">
+  <div class="copy-toolbar">
+    <div class="group">
+      <span style="font-weight:600;">步骤：</span>
+      <select id="copy-step-select">
+        {% for value, label in step_options %}
+          <option value="{{ value }}"{% if value == current_step %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
     </div>
-    <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
-  </section>
+    <div class="group">
+      <span style="font-weight:600;">语言：</span>
+      <div class="lang-tabs">
+        <button type="button" data-lang="zh"{% if current_lang == 'zh' %} class="active"{% endif %}>中文</button>
+        <button type="button" data-lang="en"{% if current_lang == 'en' %} class="active"{% endif %}>English</button>
+      </div>
+    </div>
+    <span class="copy-status" id="copy-status">未修改</span>
+    <a class="button" href="{% url 'research_admin_dashboard' %}">返回</a>
+    <button type="button" class="copy-save-btn" id="copy-save-btn" disabled>保存全部</button>
+  </div>
 
-  <form method="post" class="admin-module-card">
+  <div class="copy-helper">
+    点击页面中的任意文字即可修改；按 Esc 取消本次编辑。改完点右上"保存全部"。切换语言/步骤前请先保存，否则未保存的改动会丢失。
+  </div>
+
+  <div class="copy-stage">
+    <iframe id="copy-iframe"
+            src="{{ preview_url_base }}?step={{ current_step }}&lang={{ current_lang }}"></iframe>
+  </div>
+
+  <form id="copy-save-form" method="post" style="display:none;">
     {% csrf_token %}
-    {% for field in form %}
-    <div class="copy-field">
-      <label class="copy-label" for="{{ field.id_for_label }}">
-        {% if field.name == "intro_zh" %}第一步说明{% else %}{{ field.label }}{% endif %}
-      </label>
-      {% if field.name == "intro_zh" %}
-        <p class="copy-help">这段文字会显示在参与者进行话题排序前。</p>
-      {% elif field.name == "english_paper_prompt" %}
-        <p class="copy-help">这段文字会显示在英文论文写作任务中。</p>
-      {% elif field.name == "english_paper_duration_hours" %}
-        <p class="copy-help">英文论文倒计时从参与者第一次进入写作页开始，默认 24 小时。</p>
-      {% endif %}
-      {{ field }}
-      {{ field.errors }}
-    </div>
-    {% endfor %}
-    <div class="copy-actions">
-      <button type="submit" class="default">保存说明文字</button>
-      <a class="button" href="{% url 'research_admin_dashboard' %}">返回后台主页面</a>
-    </div>
   </form>
 </div>
+
+<script>
+(function() {
+  var iframe = document.getElementById('copy-iframe');
+  var stepSelect = document.getElementById('copy-step-select');
+  var langButtons = document.querySelectorAll('.lang-tabs button');
+  var saveBtn = document.getElementById('copy-save-btn');
+  var statusEl = document.getElementById('copy-status');
+  var previewBase = "{{ preview_url_base|escapejs }}";
+
+  // Dirty store: { 'consent_title_zh': '...new value...', ... }
+  var dirty = {};
+  var currentStep = "{{ current_step|escapejs }}";
+  var currentLang = "{{ current_lang|escapejs }}";
+
+  function refreshStatus() {
+    var n = Object.keys(dirty).length;
+    if (n === 0) {
+      statusEl.textContent = '未修改';
+      statusEl.className = 'copy-status';
+      saveBtn.disabled = true;
+    } else {
+      statusEl.textContent = '有 ' + n + ' 处未保存';
+      statusEl.className = 'copy-status dirty';
+      saveBtn.disabled = false;
+    }
+  }
+
+  function loadIframe() {
+    iframe.src = previewBase + '?step=' + encodeURIComponent(currentStep) + '&lang=' + encodeURIComponent(currentLang);
+  }
+
+  function confirmDiscard() {
+    if (Object.keys(dirty).length === 0) return true;
+    return confirm('有未保存的改动，确定切换并丢弃？');
+  }
+
+  stepSelect.addEventListener('change', function() {
+    if (!confirmDiscard()) {
+      stepSelect.value = currentStep;
+      return;
+    }
+    dirty = {};
+    refreshStatus();
+    currentStep = stepSelect.value;
+    loadIframe();
+  });
+
+  langButtons.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      if (btn.dataset.lang === currentLang) return;
+      if (!confirmDiscard()) return;
+      dirty = {};
+      refreshStatus();
+      currentLang = btn.dataset.lang;
+      langButtons.forEach(function(b) {
+        b.classList.toggle('active', b.dataset.lang === currentLang);
+      });
+      loadIframe();
+    });
+  });
+
+  // Listen for iframe edits
+  window.addEventListener('message', function(e) {
+    var msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'copy:dirty') {
+      // Map iframe field key (e.g. consent_title) to suffixed db field
+      var dbField = msg.key + '_' + currentLang;
+      dirty[dbField] = msg.value;
+      refreshStatus();
+    } else if (msg.type === 'copy:ready') {
+      // iframe reloaded
+    }
+  });
+
+  saveBtn.addEventListener('click', function() {
+    if (Object.keys(dirty).length === 0) return;
+    saveBtn.disabled = true;
+    statusEl.textContent = '正在保存…';
+    statusEl.className = 'copy-status saving';
+    var form = document.getElementById('copy-save-form');
+    // Clear any previously added hidden inputs
+    form.querySelectorAll('input[data-copy-key]').forEach(function(n) { n.remove(); });
+    Object.keys(dirty).forEach(function(k) {
+      var input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = k;
+      input.value = dirty[k];
+      input.dataset.copyKey = '1';
+      form.appendChild(input);
+    });
+    form.action = window.location.pathname;
+    form.submit();
+  });
+
+  refreshStatus();
+})();
+</script>
 {% endblock %}

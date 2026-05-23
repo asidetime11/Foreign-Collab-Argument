@@ -59,13 +59,18 @@ class Command(BaseCommand):
                         "body_en": f"This is sample comment {c_index} for the topic.",
                     },
                 )
+        scale_types = {item[0] for item in DEFAULT_SCALE_ITEMS}
+        ScaleItem.objects.filter(batch=batch, item_type__in=scale_types).delete()
         for index, item in enumerate(DEFAULT_SCALE_ITEMS, start=1):
-            item_type, label_zh, label_en = item
-            ScaleItem.objects.get_or_create(
+            item_type, label_zh, label_en, min_value, max_value = item
+            ScaleItem.objects.create(
                 batch=batch,
                 item_type=item_type,
                 label_zh=label_zh,
-                defaults={"label_en": label_en, "position": index},
+                label_en=label_en,
+                position=index,
+                min_value=min_value,
+                max_value=max_value,
             )
         for index, mode in enumerate(DEFAULT_AI_MODES, start=1):
             AIMode.objects.get_or_create(

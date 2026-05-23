@@ -142,8 +142,26 @@ class TopicAdmin(admin.ModelAdmin):
     fieldsets = (
         ("话题", {"fields": ("batches", "title_zh", "title_en", "is_enabled", "position")}),
         ("帖子与观点", {"fields": ("statement_zh", "statement_en", "post_body_zh", "post_body_en")}),
+        (
+            "打分提问文案",
+            {
+                "fields": (
+                    "agreement_prompt_zh",
+                    "agreement_prompt_en",
+                    "confidence_prompt_zh",
+                    "confidence_prompt_en",
+                ),
+                "description": "对应「你的观点」与「再次确认你的观点」两页的提问文字。",
+            },
+        ),
     )
     inlines = [TopicCommentInline]
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        initial.setdefault("agreement_prompt_zh", "你有多大程度上同意这个观点？")
+        initial.setdefault("confidence_prompt_zh", "你对自己上述的观点有多确定？")
+        return initial
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).prefetch_related("batches")
@@ -157,8 +175,20 @@ class TopicAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context["current_batch"] = selected_batch(request)
+        batch = selected_batch(request)
+        extra_context["current_batch"] = batch
         extra_context["import_url"] = reverse("admin:experiments_topic_import_from_batch")
+        extra_context["save_stance_labels_url"] = reverse("admin:experiments_topic_save_stance_labels")
+        extra_context["stance_label_rows"] = [
+            {
+                "index": i,
+                "agreement_name": f"agreement_label_{i}",
+                "agreement_value": getattr(batch, f"agreement_label_{i}", ""),
+                "confidence_name": f"confidence_label_{i}",
+                "confidence_value": getattr(batch, f"confidence_label_{i}", ""),
+            }
+            for i in range(1, 7)
+        ]
         return super().changelist_view(request, extra_context=extra_context)
 
     def save_related(self, request, form, formsets, change):
@@ -174,8 +204,32 @@ class TopicAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.import_from_batch),
                 name="experiments_topic_import_from_batch",
             ),
+            path(
+                "save-stance-labels/",
+                self.admin_site.admin_view(self.save_stance_labels),
+                name="experiments_topic_save_stance_labels",
+            ),
         ]
         return custom + urls
+
+    def save_stance_labels(self, request):
+        if request.method != "POST":
+            return redirect("admin:experiments_topic_changelist")
+        batch = selected_batch(request)
+        changed = []
+        for i in range(1, 7):
+            for prefix in ("agreement_label_", "confidence_label_"):
+                field = f"{prefix}{i}"
+                value = (request.POST.get(field) or "").strip()
+                if getattr(batch, field) != value:
+                    setattr(batch, field, value)
+                    changed.append(field)
+        if changed:
+            batch.save(update_fields=changed)
+            self.message_user(request, f"已保存「{batch.name}」的量表刻度标签。", level=messages.SUCCESS)
+        else:
+            self.message_user(request, "刻度标签没有变化。", level=messages.INFO)
+        return redirect("admin:experiments_topic_changelist")
 
     def import_from_batch(self, request):
         current = selected_batch(request)

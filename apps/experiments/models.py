@@ -2,6 +2,8 @@ import hashlib
 
 from django.db import models
 
+from .ui_copy import UI_COPY_FIELDS
+
 
 class ExperimentBatch(models.Model):
     TOPIC_STRATEGY_HIGHEST_LOWEST = "highest_lowest"
@@ -24,6 +26,18 @@ class ExperimentBatch(models.Model):
     round_order_strategy = models.CharField("轮次顺序策略", max_length=40, default=ROUND_RANDOM)
     ai_neutrality = models.CharField("AI 中立性", max_length=40, default=NEUTRALITY_MODERATE)
     ai_chat_minutes = models.PositiveIntegerField("AI 对话时长（分钟）", default=5)
+    agreement_label_1 = models.CharField("同意度刻度 1", max_length=60, blank=True, default="非常不同意")
+    agreement_label_2 = models.CharField("同意度刻度 2", max_length=60, blank=True, default="不同意")
+    agreement_label_3 = models.CharField("同意度刻度 3", max_length=60, blank=True, default="有点不同意")
+    agreement_label_4 = models.CharField("同意度刻度 4", max_length=60, blank=True, default="有点同意")
+    agreement_label_5 = models.CharField("同意度刻度 5", max_length=60, blank=True, default="同意")
+    agreement_label_6 = models.CharField("同意度刻度 6", max_length=60, blank=True, default="非常同意")
+    confidence_label_1 = models.CharField("确定度刻度 1", max_length=60, blank=True, default="完全不确定")
+    confidence_label_2 = models.CharField("确定度刻度 2", max_length=60, blank=True, default="不确定")
+    confidence_label_3 = models.CharField("确定度刻度 3", max_length=60, blank=True, default="有点不确定")
+    confidence_label_4 = models.CharField("确定度刻度 4", max_length=60, blank=True, default="有点确定")
+    confidence_label_5 = models.CharField("确定度刻度 5", max_length=60, blank=True, default="确定")
+    confidence_label_6 = models.CharField("确定度刻度 6", max_length=60, blank=True, default="非常确定")
     export_settings = models.JSONField("导出设置", default=dict, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
@@ -33,6 +47,17 @@ class ExperimentBatch(models.Model):
 
     def __str__(self):
         return self.name
+
+
+for _base, _zh_label, _zh_default, _en_default, _step, _hint in UI_COPY_FIELDS:
+    ExperimentBatch.add_to_class(
+        f"{_base}_zh",
+        models.TextField(f"{_zh_label}（中文）", blank=True, default=_zh_default),
+    )
+    ExperimentBatch.add_to_class(
+        f"{_base}_en",
+        models.TextField(f"{_zh_label}（英文）", blank=True, default=_en_default),
+    )
 
 
 class Topic(models.Model):
@@ -51,6 +76,26 @@ class Topic(models.Model):
     post_body_en = models.TextField("帖子正文（英文）", blank=True)
     statement_zh = models.TextField("观点陈述（中文）", blank=True)
     statement_en = models.TextField("观点陈述（英文）", blank=True)
+    agreement_prompt_zh = models.TextField(
+        "同意度提问（中文）",
+        blank=True,
+        help_text='打分页面"你的观点/再次确认你的观点"中第一题的提问文字。',
+    )
+    agreement_prompt_en = models.TextField(
+        "同意度提问（英文）",
+        blank=True,
+        help_text="English version of the agreement prompt.",
+    )
+    confidence_prompt_zh = models.TextField(
+        "确定度提问（中文）",
+        blank=True,
+        help_text="打分页面中第二题的提问文字。",
+    )
+    confidence_prompt_en = models.TextField(
+        "确定度提问（英文）",
+        blank=True,
+        help_text="English version of the confidence prompt.",
+    )
 
     class Meta:
         ordering = ["position", "id"]
@@ -69,6 +114,10 @@ class Topic(models.Model):
             "post_body_en": self.post_body_en,
             "statement_zh": self.statement_zh,
             "statement_en": self.statement_en,
+            "agreement_prompt_zh": self.agreement_prompt_zh,
+            "agreement_prompt_en": self.agreement_prompt_en,
+            "confidence_prompt_zh": self.confidence_prompt_zh,
+            "confidence_prompt_en": self.confidence_prompt_en,
             "comments": [comment.snapshot() for comment in self.comments.all()],
         }
 

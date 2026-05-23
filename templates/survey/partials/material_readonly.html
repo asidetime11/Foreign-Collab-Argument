@@ -1,0 +1,43 @@
+{% load static %}
+{# Read-only display of the post and comments, collapsed by default. #}
+<details class="material-recap">
+  <summary class="material-recap-summary">
+    <span class="material-recap-toggle">查看刚才的帖子和评论</span>
+    <span class="material-recap-count">（{{ material.comments|length }} 条评论）</span>
+  </summary>
+  <div class="material-recap-body">
+    <div class="post-card post-card-readonly">
+      <div class="post-header">
+        <img src="{% static 'survey/img/' %}{{ material.avatar_file }}" alt="" class="avatar avatar-large">
+        <div class="post-meta">
+          <span class="username">{{ material.author }}</span>
+          <span class="timestamp">· 2小时前</span>
+        </div>
+      </div>
+
+      <div class="post-content">
+        <h2 class="post-title">{{ material.title }}</h2>
+        <div class="post-body">{{ material.post_body|linebreaks }}</div>
+      </div>
+    </div>
+
+    <div class="comments-section comments-section-readonly">
+      <h3 class="comments-header">评论 ({{ material.comments|length }})</h3>
+      <div class="comments-list">
+        {% for comment in material.comments %}
+        <div class="comment-card">
+          <div class="comment-header">
+            <img src="{% static 'survey/img/' %}{{ comment.avatar_file }}"
+                 alt="" class="avatar avatar-small">
+            <div class="comment-meta">
+              <span class="username">{{ comment.author }}</span>
+              <span class="timestamp">· {{ comment.relative_time }}</span>
+            </div>
+          </div>
+          <div class="comment-body">{{ comment.body }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</details>

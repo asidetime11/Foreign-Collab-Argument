@@ -6,13 +6,20 @@
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
     <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
-    <h1>{{ step_meta.title }}</h1>
     {% if step == "final_text" %}
-      <p class="intro-text">请再次写下你现在的想法，可以和之前相同，也可以不同。</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_final_text">{% if lang == 'en' %}{{ batch.step_title_final_text_en }}{% else %}{{ batch.step_title_final_text_zh }}{% endif %}</span></h1>
     {% else %}
-      <p class="intro-text">把你现在想到的写下来就好，不需要标准答案。</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_initial_text">{% if lang == 'en' %}{{ batch.step_title_initial_text_en }}{% else %}{{ batch.step_title_initial_text_zh }}{% endif %}</span></h1>
+    {% endif %}
+    {% if step == "final_text" %}
+      <p class="intro-text"><span class="ui-copy" data-copy-key="text_final_hint">{% if lang == 'en' %}{{ batch.text_final_hint_en }}{% else %}{{ batch.text_final_hint_zh }}{% endif %}</span></p>
+    {% else %}
+      <p class="intro-text"><span class="ui-copy" data-copy-key="text_initial_hint">{% if lang == 'en' %}{{ batch.text_initial_hint_en }}{% else %}{{ batch.text_initial_hint_zh }}{% endif %}</span></p>
     {% endif %}
   </div>
+  {% if material %}
+    {% include "survey/partials/material_readonly.html" %}
+  {% endif %}
   <form method="post" class="task-form note-form">
     {% csrf_token %}
     <div class="thought-note">
@@ -27,4 +34,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>{% endblock %}
+{% block scripts %}{% if not preview_mode %}<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>{% endif %}{% endblock %}

@@ -13,6 +13,7 @@ urlpatterns = [
     path("admin/research/set-register-batch/", research_admin_views.set_register_batch, name="research_admin_set_register_batch"),
     path("admin/research/delete-batch/<int:batch_id>/", research_admin_views.delete_batch, name="research_admin_delete_batch"),
     path("admin/research/copy/", research_admin_views.copy_settings, name="research_admin_copy"),
+    path("admin/research/copy/preview/", research_admin_views.copy_preview, name="research_admin_copy_preview"),
     path("admin/research/bulk-register/", research_admin_views.bulk_register, name="research_admin_bulk_register"),
     path("admin/research/users/", research_admin_views.user_records, name="research_admin_users"),
     path("admin/research/users/<int:user_id>/", research_admin_views.user_detail, name="research_admin_user_detail"),

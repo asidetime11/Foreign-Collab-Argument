@@ -66,6 +66,18 @@ def _localized(material, field, language):
     return material.get(f"{field}_zh") or material.get(f"{field}_en") or ""
 
 
+def _stance_prompt(material, role, language, statement):
+    field = f"{role}_prompt"
+    custom = _localized(material, field, language)
+    if custom:
+        return custom
+    if role == "agreement":
+        if statement:
+            return f'你有多大程度上同意"{statement}"这个观点？'
+        return "你有多大程度上同意这个观点？"
+    return "你对自己上述的观点有多确定？"
+
+
 def _guard_session(request):
     profile = request.user.participant_profile
     if not profile.batch:
@@ -148,6 +160,13 @@ def _round_progress_context(session):
     return {"current_post_number": current, "total_posts": total}
 
 
+def _common_ctx(session):
+    return {
+        "batch": session.batch,
+        "lang": "en" if session.language.startswith("en") else "zh",
+    }
+
+
 @login_required
 def start(request):
     session, response = _guard_session(request)
@@ -164,6 +183,7 @@ def consent(request):
     wrong_step = _require_current(session, STEP_RESEARCH_CONSENT)
     if wrong_step:
         return wrong_step
+    lang = "en" if session.language.startswith("en") else "zh"
     if request.method == "POST":
         if request.POST.get("agree") != "on":
             return render(
@@ -171,13 +191,15 @@ def consent(request):
                 "survey/step_consent.html",
                 {
                     "session": session,
+                    "batch": session.batch,
+                    "lang": lang,
                     "step_meta": _step_context("consent"),
                     "error": "请先勾选同意，再进入下一步。",
                 },
             )
         accept_research_consent(session)
         return redirect(_current_route(session))
-    return render(request, "survey/step_consent.html", {"session": session, "step_meta": _step_context("consent")})
+    return render(request, "survey/step_consent.html", {"session": session, "batch": session.batch, "lang": lang, "step_meta": _step_context("consent")})
 
 
 @login_required
@@ -214,6 +236,7 @@ def topic_order(request):
             "topics": topics,
             "step_meta": _step_context("topic_order"),
             "topic_order_intro": session.batch.intro_zh or DEFAULT_TOPIC_ORDER_INTRO_ZH,
+            **_common_ctx(session),
         },
     )
 
@@ -264,6 +287,7 @@ def post(request):
             "material": material,
             "step_meta": _step_context("post"),
             **_round_progress_context(session),
+            **_common_ctx(session),
         },
     )
 
@@ -280,11 +304,13 @@ def scale(request, step):
     items = list(scale_items_for_step(session.batch, step))
     if step in {"stance_before", "stance_after"} and not items:
         items = [
-            SimpleNamespace(pk="default-agreement", item_type=ScaleItem.STANCE, label_zh="我同意该观点", label_en="I agree with this view", left_label_zh="完全不同意", left_label_en="Strongly Disagree", right_label_zh="完全同意", right_label_en="Strongly Agree", min_value=1, max_value=7),
-            SimpleNamespace(pk="default-confidence", item_type=ScaleItem.STANCE, label_zh="我对判断有把握", label_en="I am certain about my judgment", left_label_zh="完全没把握", left_label_en="Not Confident At All", right_label_zh="完全有把握", right_label_en="Completely Confident", min_value=1, max_value=7),
+            SimpleNamespace(pk="default-agreement", item_type=ScaleItem.STANCE, stance_role="agreement", label_zh="同意程度", label_en="Agreement", left_label_zh="", left_label_en="", right_label_zh="", right_label_en="", min_value=1, max_value=6),
+            SimpleNamespace(pk="default-confidence", item_type=ScaleItem.STANCE, stance_role="confidence", label_zh="确定程度", label_en="Confidence", left_label_zh="", left_label_en="", right_label_zh="", right_label_en="", min_value=1, max_value=6),
         ]
-    for item in items:
+    for idx, item in enumerate(items):
         item.values = range(item.min_value, item.max_value + 1)
+        if not hasattr(item, "stance_role") or item.stance_role is None:
+            item.stance_role = "agreement" if idx == 0 else "confidence"
     if request.method == "POST":
         form = ScaleForm(items, request.POST)
         if form.is_valid():
@@ -306,6 +332,18 @@ def scale(request, step):
     else:
         form = ScaleForm(items)
     statement = _localized(round_obj.material_snapshot, "statement", session.language)
+    agreement_prompt = _stance_prompt(round_obj.material_snapshot, "agreement", session.language, statement)
+    confidence_prompt = _stance_prompt(round_obj.material_snapshot, "confidence", session.language, statement)
+    agreement_defaults = ["非常不同意", "不同意", "有点不同意", "有点同意", "同意", "非常同意"]
+    confidence_defaults = ["完全不确定", "不确定", "有点不确定", "有点确定", "确定", "非常确定"]
+    agreement_labels = [
+        getattr(session.batch, f"agreement_label_{i}", "") or agreement_defaults[i - 1]
+        for i in range(1, 7)
+    ]
+    confidence_labels = [
+        getattr(session.batch, f"confidence_label_{i}", "") or confidence_defaults[i - 1]
+        for i in range(1, 7)
+    ]
     return render(
         request,
         "survey/step_scale.html",
@@ -315,8 +353,13 @@ def scale(request, step):
             "step": step,
             "round": round_obj,
             "statement": statement,
+            "agreement_prompt": agreement_prompt,
+            "confidence_prompt": confidence_prompt,
+            "agreement_labels": agreement_labels,
+            "confidence_labels": confidence_labels,
             "step_meta": _step_context(step),
             **_round_progress_context(session),
+            **_common_ctx(session),
         },
     )
 
@@ -347,6 +390,23 @@ def text_response(request, step):
             return redirect(_current_route(session))
     else:
         form = TextResponseForm(initial={"input_method": "keyboard"})
+    language = session.language
+    comments = round_obj.material_snapshot.get("comments", [])
+    material = {
+        "title": _localized(round_obj.material_snapshot, "title", language),
+        "post_body": _localized(round_obj.material_snapshot, "post_body", language),
+        "author": comment_display_name(len(comments)),
+        "avatar_file": comment_avatar_file(len(comments)),
+        "comments": [
+            {
+                **comment,
+                "author": comment_display_name(index),
+                "body": comment.get("body_en") if language.startswith("en") and comment.get("body_en") else comment.get("body_zh"),
+                "avatar_file": comment_avatar_file(index),
+            }
+            for index, comment in enumerate(comments)
+        ],
+    }
     return render(
         request,
         "survey/step_text.html",
@@ -354,8 +414,10 @@ def text_response(request, step):
             "form": form,
             "step": step,
             "round": round_obj,
+            "material": material,
             "step_meta": _step_context(step),
             **_round_progress_context(session),
+            **_common_ctx(session),
         },
     )
 
@@ -387,6 +449,7 @@ def mode_select(request):
             "round": round_obj,
             "step_meta": _step_context("mode"),
             **_round_progress_context(session),
+            **_common_ctx(session),
         },
     )
 
@@ -414,6 +477,7 @@ def chat(request):
             "chat_messages": chat_messages,
             "step_meta": _step_context("chat"),
             **_round_progress_context(session),
+            **_common_ctx(session),
         },
     )
 
@@ -428,7 +492,7 @@ def done(request):
         return wrong_step
     language = session.language
     outro = session.batch_snapshot.get("outro_en") if language.startswith("en") else session.batch_snapshot.get("outro_zh")
-    return render(request, "survey/done.html", {"session": session, "outro": outro, "step_meta": _step_context("done")})
+    return render(request, "survey/done.html", {"session": session, "outro": outro, "step_meta": _step_context("done"), **_common_ctx(session)})
 
 
 @login_required
@@ -479,6 +543,7 @@ def english_paper(request):
             "deadline_at": deadline_at,
             "draft": draft,
             "step_meta": _step_context("english_paper"),
+            **_common_ctx(session),
         },
     )
 

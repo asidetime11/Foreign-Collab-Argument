@@ -35,21 +35,26 @@ DEFAULT_AI_MODES = [
 ]
 
 DEFAULT_TOPICS = [
-    ("大学课堂应更多使用 AI 工具", "University classes should use more AI tools"),
-    ("远程办公会削弱团队合作", "Remote work weakens teamwork"),
-    ("短视频平台应限制青少年使用时间", "Short-video platforms should limit teen usage time"),
-    ("城市应优先发展公共交通", "Cities should prioritize public transit"),
-    ("学校应减少标准化考试", "Schools should reduce standardized testing"),
-    ("社交媒体让公共讨论更理性", "Social media makes public debate more rational"),
-    ("企业应公开算法推荐规则", "Companies should disclose recommendation algorithms"),
-    ("大学生应被鼓励创业", "University students should be encouraged to start businesses"),
-    ("网络匿名有利于真实表达", "Online anonymity helps honest expression"),
-    ("博物馆应免费开放", "Museums should be free to enter"),
+    ("国家是否应该全面禁止销售香烟", "Should countries completely ban the sale of cigarettes?"),
+    ("高中生应该把全部精力放在学习上，还是可以做兼职积累社会经验", "Should high school students focus entirely on studying, or can they work part-time to gain social experience?"),
+    ("为了研发新的药物和治疗方法，是否应该使用动物进行实验", "Should animals be used in experiments to develop new medicines and treatments?"),
+    ("全球变暖主要是由人类活动造成的吗", "Is global warming mainly caused by human activities?"),
+    ("转基因食品是否应该被广泛生产和销售", "Should genetically modified foods be widely produced and sold?"),
+    ("标准化考试是否能够公平地衡量学生的真实能力", "Can standardized tests fairly measure students' true abilities?"),
+    ("智能机器人普及后，是否会导致大量人类失业", "Will the widespread use of intelligent robots lead to massive human unemployment?"),
+    ("短视频平台是否能帮助青少年学习有价值的知识", "Can short-video platforms help teenagers learn valuable knowledge?"),
+    ("自动驾驶汽车会让交通变得更加安全吗", "Will self-driving cars make traffic safer?"),
+    ("美颜技术和滤镜的普及，会不会影响大众的审美观", "Will the popularity of beauty filters affect the public's aesthetic standards?"),
 ]
 
 DEFAULT_SCALE_ITEMS = [
-    ("emotion", "我现在感到放松", "I feel relaxed right now"),
-    ("emotion", "我现在感到被激发思考", "I feel intellectually engaged right now"),
-    ("ai_eval", "AI 的回复有帮助", "The AI response was helpful"),
-    ("ai_eval", "AI 的回复保持了中立", "The AI response remained neutral"),
+    ("emotion", "惊讶", "Surprised", 1, 5),
+    ("emotion", "好奇", "Curious", 1, 5),
+    ("emotion", "兴奋", "Excited", 1, 5),
+    ("emotion", "困惑", "Confused", 1, 5),
+    ("emotion", "焦虑", "Anxious", 1, 5),
+    ("emotion", "挫败", "Frustrated", 1, 5),
+    ("emotion", "无聊", "Bored", 1, 5),
+    ("ai_eval", "AI 的回复有帮助", "The AI response was helpful", 1, 7),
+    ("ai_eval", "AI 的回复保持了中立", "The AI response remained neutral", 1, 7),
 ]

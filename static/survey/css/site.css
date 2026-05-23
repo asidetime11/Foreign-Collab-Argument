@@ -2258,6 +2258,312 @@ p {
   display: none !important;
 }
 
+/* Emotion step: hide per-card number row, show shared legend at bottom */
+.slider-numbers-hidden {
+  display: none;
+}
+
+.emotion-scale-legend {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 18px 4px;
+  border-top: 1px solid rgba(216, 228, 223, .6);
+  margin-top: 4px;
+}
+
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.legend-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.legend-text {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Stance steps: borderless cards */
+.scale-card-borderless {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.scale-question.answered .scale-card-borderless {
+  border: none;
+  background: transparent;
+}
+
+/* Stance question text above slider */
+.stance-question-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.5;
+  margin: 0 0 12px;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+/* Text labels below numbers for stance steps */
+.stance-scale-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 4px 12px 0;
+  margin-top: 2px;
+}
+
+.stance-stop {
+  flex: 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stance-scale-labels .number-label {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+}
+
+.stance-scale-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.35;
+  text-align: center;
+  word-break: keep-all;
+  white-space: nowrap;
+}
+
+/* Give the slider + labels room so end-labels don't overflow the card */
+.stance-question .slider-container {
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+/* Spacing between stance question blocks */
+.stance-question + .stance-question {
+  margin-top: 28px;
+}
+
+/* Read-only post + comments shown above the writing area on text steps */
+.task-page-text .material-recap {
+  width: 100%;
+  margin: 0 auto 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: #fafbfc;
+  overflow: hidden;
+}
+
+.task-page-text .material-recap-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  list-style: none;
+  user-select: none;
+}
+
+.task-page-text .material-recap-summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-page-text .material-recap-summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 12px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  transition: transform .15s ease;
+}
+
+.task-page-text .material-recap[open] > .material-recap-summary::before {
+  transform: rotate(90deg);
+}
+
+.task-page-text .material-recap-toggle {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.task-page-text .material-recap-count {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.task-page-text .material-recap-body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--color-border);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.task-page-text .material-recap .post-card-readonly {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+  margin-bottom: 10px;
+  padding: 14px 16px;
+}
+
+.task-page-text .material-recap .post-title {
+  font-size: 17px;
+}
+
+.task-page-text .material-recap .post-body {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.task-page-text .material-recap .comments-section-readonly .comments-header {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 6px 0 8px;
+}
+
+.task-page-text .material-recap .comment-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+
+
+/* Emotion step compact layout — fit 7 cards + legend on one screen, no scroll */
+.task-emotion {
+  padding: 10px 14px;
+}
+.task-emotion .step-route {
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.task-emotion .route-dot {
+  width: 6px;
+  height: 6px;
+}
+.task-emotion .task-hero {
+  padding: 8px 14px;
+  margin-bottom: 6px;
+  border-width: 1px;
+}
+.task-emotion .task-hero h1 {
+  font-size: 16px;
+  line-height: 1.15;
+}
+.task-emotion .step-label {
+  margin: 0 0 2px;
+  font-size: 11px;
+}
+.task-emotion .intro-text {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.task-emotion .rating-form {
+  gap: 8px;
+}
+.task-emotion .scale-question {
+  margin-bottom: 0;
+}
+.task-emotion .scale-card {
+  gap: 2px;
+  padding: 3px 12px 2px;
+  box-shadow: 0 2px 8px rgba(20, 34, 56, .04);
+  border-radius: 8px;
+}
+.task-emotion .scale-card-head {
+  gap: 8px;
+}
+.task-emotion .scale-label {
+  font-size: 13px;
+  line-height: 1.15;
+}
+.task-emotion .scale-value-pill {
+  min-width: 42px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.task-emotion .slider-container {
+  gap: 0;
+}
+.task-emotion .slider-wrapper {
+  height: 20px;
+}
+.task-emotion .scale-slider {
+  min-height: 20px;
+  height: 20px;
+}
+.task-emotion .scale-slider::-webkit-slider-runnable-track,
+.task-emotion .scale-slider::-moz-range-track {
+  height: 8px;
+}
+.task-emotion .scale-slider::-webkit-slider-thumb,
+.task-emotion .scale-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+}
+.task-emotion .emotion-scale-legend {
+  justify-content: space-between;
+  padding: 4px 20px 0;
+  margin-top: 2px;
+}
+.task-emotion .legend-item {
+  flex: none;
+  gap: 2px;
+  align-items: center;
+}
+.task-emotion .legend-num {
+  width: 20px;
+  height: 18px;
+  font-size: 10px;
+}
+.task-emotion .legend-text {
+  font-size: 10px;
+  line-height: 1.2;
+}
+.task-emotion .sticky-submit {
+  padding: 4px 14px;
+  gap: 8px;
+}
+.task-emotion .sticky-submit strong {
+  font-size: 12px;
+}
+.task-emotion .sticky-submit button {
+  padding: 6px 18px;
+  font-size: 13px;
+}
+.task-emotion .soft-alert {
+  margin: 2px 0;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
 @media (max-width: 760px) {
   body {
     font-size: 13px;
