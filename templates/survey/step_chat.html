@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}与人工智能对话{% endblock %}
 {% block content %}
-<section class="task-page task-page-chat chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}" data-remaining-seconds="{{ remaining_seconds }}">
+<section class="task-page task-page-chat chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}" data-remaining-seconds="{{ remaining_seconds }}"{% if needs_intro %} data-needs-intro="true"{% endif %}>
   {% include "survey/partials/step_header.html" %}
   <div class="chat-head">
     <div>
@@ -46,7 +46,7 @@
 {% endblock %}
 {% block scripts %}
 {% if not preview_mode %}
-<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>
-<script src="{% static 'survey/js/chat.js' %}?v=20260518-1"></script>
+<script src="{% static 'survey/js/recorder.js' %}?v=20260523-3"></script>
+<script src="{% static 'survey/js/chat.js' %}?v=20260523-3"></script>
 {% endif %}
 {% endblock %}

@@ -30,7 +30,7 @@
     {% csrf_token %}
     {% for item in items %}
       <div class="scale-question{% if step == 'stance_before' or step == 'stance_after' %} stance-question{% endif %}" data-scale-id="{{ item.pk }}">
-        <div class="scale-card{% if step == 'stance_before' or step == 'stance_after' %} scale-card-borderless{% endif %}">
+        <div class="scale-card">
 
           {% if step == "stance_before" or step == "stance_after" %}
             {% if item.stance_role == "agreement" %}
@@ -40,7 +40,7 @@
             {% endif %}
           {% else %}
             <div class="scale-card-head">
-              <label class="scale-label">{{ item.label_zh }}</label>
+              <label class="scale-label">{% if step == "emotion" or step == "ai_eval" %}<span class="ui-copy" data-copy-key="scale_item_{{ item.pk }}">{% if lang == 'en' %}{{ item.label_en|default:item.label_zh }}{% else %}{{ item.label_zh }}{% endif %}</span>{% else %}{{ item.label_zh }}{% endif %}</label>
               <span class="scale-value-pill"><span data-scale-value>{{ item.min_value }}</span> / {{ item.max_value }}</span>
             </div>
           {% endif %}

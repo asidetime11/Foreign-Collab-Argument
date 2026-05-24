@@ -16,15 +16,13 @@
           <strong>{{ mode.name_zh }}</strong>
           <span class="mode-tag">AI</span>
         </span>
-        <span class="mode-description">{{ mode.prompt_zh }}</span>
       </button>
     {% endfor %}
-    <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit">
+    <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit" disabled aria-disabled="true" title="该选项暂时不可用">
       <span class="mode-card-head">
         <strong>跳过</strong>
-        <span class="mode-tag">直接继续</span>
+        <span class="mode-tag">暂不可用</span>
       </span>
-      <span class="mode-description">不使用人工智能，直接进入下一站。</span>
     </button>
   </form>
 </section>

@@ -7,7 +7,7 @@ from apps.experiments.defaults import (
     DEFAULT_TOPIC_ORDER_INTRO_EN,
     DEFAULT_TOPIC_ORDER_INTRO_ZH,
 )
-from apps.experiments.models import AIMode, ExperimentBatch, RatingScaleConfig, ScaleItem, Topic, TopicComment
+from apps.experiments.models import AIMode, EnglishPaperConfig, ExperimentBatch, RatingScaleConfig, ScaleItem, Topic, TopicComment
 
 
 OLD_DEMO_INTRO_ZH = "请按你的真实想法对以下话题排序。提交后不可返回修改。"
@@ -37,6 +37,26 @@ class Command(BaseCommand):
                 setattr(batch, field, value)
             batch.save(update_fields=list(updates))
         RatingScaleConfig.objects.get_or_create(batch=batch)
+        ep_config, ep_created = EnglishPaperConfig.objects.get_or_create(
+            batch=batch,
+            defaults={
+                "title_zh": "英文论文写作",
+                "title_en": "English paper writing",
+                "intro_zh": "请在规定时间内完成英文论文写作。",
+                "intro_en": "Please complete your English argumentative essay within the time limit.",
+                "prompt": "Write an English argumentative essay based on the discussion you completed.",
+                "duration_minutes": 30,
+                "gate_title_zh": "即将进入写作模块",
+                "gate_title_en": "You're About to Enter the Writing Module",
+                "gate_body_zh": '接下来你将进行英文论文写作。请放轻松，根据你对话题的理解，用英文写一篇论证性短文。计时将在你点击"进入写作"后开始。',
+                "gate_body_en": 'You will now write a short argumentative essay in English. Take a deep breath and relax. The timer will start after you click "Start Writing".',
+                "gate_cta_zh": "进入写作",
+                "gate_cta_en": "Start Writing",
+            },
+        )
+        if not ep_created and ep_config.duration_minutes != 30 and ep_config.duration_minutes == 0:
+            ep_config.duration_minutes = 30
+            ep_config.save(update_fields=["duration_minutes"])
         for index, (title_zh, title_en) in enumerate(DEFAULT_TOPICS, start=1):
             topic, _ = Topic.objects.get_or_create(
                 title_zh=title_zh,
@@ -73,9 +93,13 @@ class Command(BaseCommand):
                 max_value=max_value,
             )
         for index, mode in enumerate(DEFAULT_AI_MODES, start=1):
-            AIMode.objects.get_or_create(
+            obj, created = AIMode.objects.get_or_create(
                 batch=batch,
                 name_zh=mode["name_zh"],
                 defaults={**mode, "position": index},
             )
+            if not created and not obj.intro_template_zh:
+                obj.intro_template_zh = mode.get("intro_template_zh", "")
+                obj.intro_template_en = mode.get("intro_template_en", "")
+                obj.save(update_fields=["intro_template_zh", "intro_template_en"])
         self.stdout.write(self.style.SUCCESS("Demo defaults seeded."))

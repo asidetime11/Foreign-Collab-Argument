@@ -9,6 +9,12 @@
     <h1><span class="ui-copy" data-copy-key="done_title">{% if lang == 'en' %}{{ batch.done_title_en }}{% else %}{{ batch.done_title_zh }}{% endif %}</span></h1>
     <p><span class="ui-copy" data-copy-key="done_body">{% if lang == 'en' %}{{ batch.done_body_en }}{% else %}{{ batch.done_body_zh }}{% endif %}</span></p>
     {% if outro %}<p class="outro-text">{{ outro }}</p>{% endif %}
+    {% if is_tester %}
+      <form method="post" action="{% url 'survey:reset_self' %}" style="margin-top:24px">
+        {% csrf_token %}
+        <button type="submit" class="button" style="background:#c96a00;color:#fff;border:0;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:800;cursor:pointer;">重新开始测试</button>
+      </form>
+    {% endif %}
     {% if request and not request.user.participant_profile.has_required_display_name %}
       <div class="profile-reminder">
         <p>最后提醒一下：如果方便，请补充个人信息，便于后续数据整理。</p>

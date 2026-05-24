@@ -19,6 +19,7 @@ urlpatterns = [
     path("admin/research/users/<int:user_id>/", research_admin_views.user_detail, name="research_admin_user_detail"),
     path("admin/research/users/delete/", research_admin_views.delete_users, name="research_admin_delete_users"),
     path("admin/research/users/<int:user_id>/delete/", research_admin_views.delete_user, name="research_admin_delete_user"),
+    path("admin/research/users/<int:user_id>/reset/", research_admin_views.reset_test_user, name="research_admin_reset_test_user"),
     path("admin/research/export-all/", research_admin_views.export_all, name="research_admin_export_all"),
     path("admin/", RedirectView.as_view(pattern_name="research_admin_dashboard", permanent=False)),
     path("admin/", admin.site.urls),

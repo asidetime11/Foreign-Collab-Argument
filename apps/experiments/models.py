@@ -60,6 +60,54 @@ for _base, _zh_label, _zh_default, _en_default, _step, _hint in UI_COPY_FIELDS:
     )
 
 
+class EnglishPaperConfig(models.Model):
+    batch = models.OneToOneField(
+        ExperimentBatch,
+        on_delete=models.CASCADE,
+        related_name="english_paper_config",
+        verbose_name="实验批次",
+    )
+    title_zh = models.CharField("标题（中文）", max_length=200, default="英文论文写作")
+    title_en = models.CharField("标题（英文）", max_length=200, default="English paper writing")
+    intro_zh = models.TextField(
+        "说明文字（中文）",
+        default="请在规定时间内完成英文论文写作。",
+        blank=True,
+        help_text="显示在标题下方的引导说明。",
+    )
+    intro_en = models.TextField(
+        "说明文字（英文）",
+        default="Please complete your English argumentative essay within the time limit.",
+        blank=True,
+    )
+    prompt = models.TextField(
+        "英文论文要求",
+        default="Write an English argumentative essay based on the discussion you completed.",
+    )
+    duration_minutes = models.PositiveIntegerField("时长（分钟）", default=30)
+    gate_title_zh = models.CharField("入口页标题（中文）", max_length=200, default="即将进入写作模块")
+    gate_title_en = models.CharField("入口页标题（英文）", max_length=200, default="You're About to Enter the Writing Module")
+    gate_body_zh = models.TextField(
+        "入口页说明（中文）",
+        default='接下来你将进行英文论文写作。请放轻松，根据你对话题的理解，用英文写一篇论证性短文。计时将在你点击"进入写作"后开始。',
+        blank=True,
+    )
+    gate_body_en = models.TextField(
+        "入口页说明（英文）",
+        default='You will now write a short argumentative essay in English. Take a deep breath and relax. The timer will start after you click "Start Writing".',
+        blank=True,
+    )
+    gate_cta_zh = models.CharField("入口按钮文字（中文）", max_length=100, default="进入写作")
+    gate_cta_en = models.CharField("入口按钮文字（英文）", max_length=100, default="Start Writing")
+
+    class Meta:
+        verbose_name = "英文论文配置"
+        verbose_name_plural = "英文论文配置"
+
+    def __str__(self):
+        return f"英文论文配置 — {self.batch.name}"
+
+
 class Topic(models.Model):
     batches = models.ManyToManyField(
         ExperimentBatch,
@@ -209,6 +257,16 @@ class AIMode(models.Model):
     name_en = models.CharField("模式名称（英文）", max_length=120, blank=True)
     prompt_zh = models.TextField("提示词（中文）")
     prompt_en = models.TextField("提示词（英文）", blank=True)
+    intro_template_zh = models.TextField(
+        "开场说明模板（中文）",
+        blank=True,
+        help_text="对话开始时 AI 根据用户观点生成的引导说明。留空则不生成开场说明。",
+    )
+    intro_template_en = models.TextField(
+        "开场说明模板（英文）",
+        blank=True,
+        help_text="English version of the intro template shown at the start of chat.",
+    )
     position = models.PositiveIntegerField("排序", default=0)
     is_enabled = models.BooleanField("启用", default=True)
 
@@ -258,7 +316,12 @@ class SystemAPIConfig(models.Model):
 
 class LLMProvider(models.Model):
     """LLM模型提供商配置"""
+    KIND_CHAT = "chat"
+    KIND_TRANSCRIBE = "transcribe"
+    KIND_CHOICES = [(KIND_CHAT, "大模型"), (KIND_TRANSCRIBE, "语音转写")]
+
     name = models.CharField("提供商名称", max_length=120, unique=True, help_text="例如: GPT-4, Claude, Qwen等")
+    kind = models.CharField("用途", max_length=20, choices=KIND_CHOICES, default=KIND_CHAT, help_text="大模型用于 AI 对话，语音转写用于把录音转成文字。")
     model_name = models.CharField("模型名称", max_length=200, help_text="调用API时使用的模型标识，例如: gpt-4, claude-3-opus")
     base_url = models.URLField("API Base URL", help_text="模型API的基础URL")
     priority = models.PositiveIntegerField("调用顺序", default=0, help_text="数字越小越优先调用")

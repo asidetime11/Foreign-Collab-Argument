@@ -11,7 +11,8 @@
   const countdown = document.querySelector("[data-countdown]");
   const status = document.querySelector("[data-chat-status]");
   const stopReply = document.querySelector("[data-stop-reply]");
-  let remaining = Number(panel.dataset.remainingSeconds || Number(panel.dataset.minutes || 0) * 60);
+  const rawRemaining = parseInt(panel.dataset.remainingSeconds, 10);
+  let remaining = isNaN(rawRemaining) ? Number(panel.dataset.minutes || 0) * 60 : rawRemaining;
   let allowFinishSubmit = false;
   let activeController = null;
   let activeInterrupt = null;
@@ -274,15 +275,68 @@
   }
 
   if (countdown) {
-    countdown.textContent = format(remaining);
-    const timer = window.setInterval(() => {
-      remaining -= 1;
-      countdown.textContent = format(Math.max(remaining, 0));
-      if (remaining <= 0) {
-        window.clearInterval(timer);
-        if (finishForm) finishForm.submit();
+    countdown.textContent = format(Math.max(remaining, 0));
+    if (remaining <= 0) {
+      allowFinishSubmit = true;
+      if (finishForm) finishForm.submit();
+    } else {
+      const timer = window.setInterval(() => {
+        remaining -= 1;
+        countdown.textContent = format(Math.max(remaining, 0));
+        if (remaining <= 0) {
+          window.clearInterval(timer);
+          allowFinishSubmit = true;
+          if (finishForm) finishForm.submit();
+        }
+      }, 1000);
+    }
+  }
+
+  if (panel.dataset.needsIntro === "true") {
+    const introAssistant = bubble("", "assistant", true);
+    const introRevealer = createTextRevealer(introAssistant);
+    const introInput = form.querySelector("input[name=message]");
+    const introSubmit = form.querySelector('button[type="submit"]');
+    if (introInput) introInput.disabled = true;
+    if (introSubmit) introSubmit.disabled = true;
+    setStatus("AI 正在为你准备说明...", true);
+
+    (async function () {
+      const data = new FormData();
+      try {
+        const response = await fetch("/ai/intro/" + panel.dataset.roundId + "/", {
+          method: "POST",
+          headers: { "X-CSRFToken": csrfToken() },
+          body: data,
+        });
+        if (response.status === 204) {
+          // No intro template configured, nothing to show
+        } else {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const result = await reader.read();
+            if (result.done) break;
+            buffer += decoder.decode(result.value, { stream: true });
+            const blocks = buffer.split("\n\n");
+            buffer = blocks.pop() || "";
+            blocks.forEach((block) => handleServerEvent(block, introRevealer, introAssistant));
+          }
+          if (buffer) handleServerEvent(buffer, introRevealer, introAssistant);
+          await introRevealer.finish();
+        }
+      } catch (_err) {
+        introAssistant.classList.add("error");
+        introRevealer.push("暂时没有收到稳定回复，请稍后再试一次。");
+        await introRevealer.finish();
+      } finally {
+        if (introInput) introInput.disabled = false;
+        if (introSubmit) introSubmit.disabled = false;
+        setStatus("", false);
+        if (introInput) introInput.focus();
       }
-    }, 1000);
+    })();
   }
 
   form.addEventListener("submit", async function (event) {

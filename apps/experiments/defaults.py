@@ -19,18 +19,43 @@ DEFAULT_AI_MODES = [
         "name_en": "Offer a different view",
         "prompt_zh": "请基于参与者当前观点，温和地提出一个不同角度或可能的反例，帮助参与者思考问题的复杂性。不要攻击参与者，不要强行说服，不要给出绝对结论。回复应简洁、自然，并以一个开放式问题结束。",
         "prompt_en": "Gently offer a different angle or possible counterexample based on the participant's current view. Do not attack, force persuasion, or state absolute conclusions. Keep the reply concise and natural, ending with an open question.",
+        "intro_template_zh": (
+            "请根据以下用户背景信息，用两到三句话向用户说明接下来的对话方式：你将温和地从不同角度与用户探讨这个话题，帮助他们看到问题的另一面，但不会强迫他们改变想法。语气友善自然，结尾可以简短邀请用户开始分享。"
+        ),
+        "intro_template_en": (
+            "Based on the user background below, write two to three sentences to introduce how the conversation will work: "
+            "you will gently explore different angles of the topic with the user to help them see another side, "
+            "without pressuring them to change their mind. Keep the tone warm and natural, and briefly invite them to start sharing."
+        ),
     },
     {
         "name_zh": "支持我的观点",
         "name_en": "Support my view",
         "prompt_zh": "请理解并复述参与者的主要观点，补充一到两个可能支持该观点的理由或背景。保持适度中立，不要夸大证据，不要暗示该观点一定正确。",
         "prompt_en": "Reflect the participant's main view and add one or two possible supporting reasons or background points. Stay moderately neutral and avoid overstating certainty.",
+        "intro_template_zh": (
+            "请根据以下用户背景信息，用两到三句话向用户说明接下来的对话方式：你将帮助用户整理和补充支持他们已有观点的理由和背景，让他们能更清晰地表达自己的立场。语气积极支持，结尾简短邀请用户开始分享。"
+        ),
+        "intro_template_en": (
+            "Based on the user background below, write two to three sentences to introduce how the conversation will work: "
+            "you will help the user organize and expand on the reasons and context that support their existing view, "
+            "so they can express their stance more clearly. Keep the tone encouraging, and briefly invite them to start sharing."
+        ),
     },
     {
         "name_zh": "总结信息",
         "name_en": "Summarize information",
         "prompt_zh": "请把当前问题中可能相关的信息和不同解释路径整理清楚，帮助参与者看见问题的多个层面。不要替参与者下结论，不要要求参与者改变观点。",
         "prompt_en": "Organize relevant information and possible interpretations so the participant can see multiple layers of the issue. Do not decide for them or ask them to change their view.",
+        "intro_template_zh": (
+            "请根据以下用户背景信息，用两到三句话向用户说明接下来的对话方式：你将帮助用户梳理围绕这个话题的不同信息和解读角度，让他们对问题的全貌有更清晰的认识，而不会替他们下结论。语气中立客观，结尾简短邀请用户开始。"
+        ),
+        "intro_template_en": (
+            "Based on the user background below, write two to three sentences to introduce how the conversation will work: "
+            "you will help the user map out the different information and interpretations around this topic "
+            "so they get a clearer picture without drawing conclusions for them. Keep the tone neutral and objective, "
+            "and briefly invite them to start."
+        ),
     },
 ]
 

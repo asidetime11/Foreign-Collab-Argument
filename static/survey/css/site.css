@@ -1116,7 +1116,7 @@ p {
 }
 
 .post-title {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 600;
   color: var(--color-text);
   margin: 0 0 var(--spacing-sm) 0;
@@ -1981,6 +1981,35 @@ p {
   background: #fff;
   padding: 16px 18px;
   box-shadow: 0 8px 22px rgba(20, 34, 56, .06);
+  margin-bottom: 20px;
+}
+
+.paper-brief-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin: 0;
+}
+
+.paper-brief-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.intro-body-text p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-text);
+  margin: 0 0 12px;
+}
+
+.intro-body-text p:last-child {
+  margin-bottom: 0;
 }
 
 .task-hero-main {
@@ -2015,6 +2044,18 @@ p {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+}
+
+.task-page-text .task-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.task-page-text .task-hero .paper-countdown {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .paper-countdown {
@@ -2320,8 +2361,8 @@ p {
   color: var(--color-text);
   line-height: 1.5;
   margin: 0 0 12px;
-  padding-left: 28px;
-  padding-right: 28px;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Text labels below numbers for stance steps */
@@ -2360,13 +2401,13 @@ p {
 
 /* Give the slider + labels room so end-labels don't overflow the card */
 .stance-question .slider-container {
-  padding-left: 28px;
-  padding-right: 28px;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Spacing between stance question blocks */
 .stance-question + .stance-question {
-  margin-top: 28px;
+  margin-top: 0;
 }
 
 /* Read-only post + comments shown above the writing area on text steps */
@@ -2473,8 +2514,8 @@ p {
   border-width: 1px;
 }
 .task-emotion .task-hero h1 {
-  font-size: 16px;
-  line-height: 1.15;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.2;
 }
 .task-emotion .step-label {
   margin: 0 0 2px;
@@ -2686,7 +2727,7 @@ p {
   }
 
   .post-title {
-    font-size: 15px;
+    font-size: 20px;
   }
 
   .avatar-large {
@@ -2983,7 +3024,7 @@ main.shell {
 }
 
 .post-title {
-  font-size: 16px;
+  font-size: 22px;
   margin: 0 0 8px 0;
   line-height: 1.3;
 }

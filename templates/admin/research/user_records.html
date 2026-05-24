@@ -123,6 +123,41 @@
     text-decoration: underline;
   }
 
+  .reset-button {
+    border: 0;
+    border-radius: 8px;
+    background: #c96a00;
+    color: #fff;
+    font-weight: 800;
+    min-height: 42px;
+    padding: 10px 16px;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(201, 106, 0, .16);
+  }
+
+  .reset-button:hover {
+    background: #a05200;
+  }
+
+  .reset-button.inline {
+    padding: 9px 14px;
+    box-shadow: none;
+  }
+
+  .tester-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: rgba(201, 106, 0, .1);
+    color: #a05200;
+    font-size: 12px;
+    font-weight: 800;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
   .danger-button {
     border: 0;
     border-radius: 8px;
@@ -321,7 +356,7 @@
                   <input class="records-check" type="checkbox" name="user_ids" value="{{ row.user.pk }}" aria-label="选择 {{ row.user.username }}">
                 {% endif %}
               </td>
-              <td><a class="user-link" href="{% url 'research_admin_user_detail' row.user.pk %}">{{ row.user.username }}</a></td>
+              <td><a class="user-link" href="{% url 'research_admin_user_detail' row.user.pk %}">{{ row.user.username }}</a>{% if row.is_tester %}<span class="tester-badge">测试</span>{% endif %}</td>
               <td>{{ row.batch_name }}</td>
               <td>{{ row.display_name|default:"-" }}</td>
               <td>
@@ -333,14 +368,25 @@
               <td>{{ row.started_at|date:"Y年n月j日 H:i"|default:"-" }}</td>
               <td>{{ row.completed_at|date:"Y年n月j日 H:i"|default:"-" }}</td>
               <td>
+                {% if row.is_tester %}
+                  <button
+                    class="reset-button inline"
+                    type="submit"
+                    form="records-delete-form"
+                    formaction="{% url 'research_admin_reset_test_user' row.user.pk %}"
+                    data-confirm="确认重置 {{ row.user.username }} 的所有答题记录吗？账号本身保留，可重新测试。"
+                  >重置记录</button>
+                {% endif %}
                 {% if row.can_delete %}
                   <button
                     class="danger-button inline"
                     type="submit"
+                    form="records-delete-form"
                     formaction="{% url 'research_admin_delete_user' row.user.pk %}"
                     data-confirm="确认删除 {{ row.user.username }} 吗？"
                   >删除</button>
-                {% else %}
+                {% endif %}
+                {% if not row.can_delete and not row.is_tester %}
                   <span class="muted-action">不可删除</span>
                 {% endif %}
               </td>
@@ -375,10 +421,10 @@
     const deleteMessage = document.querySelector("[data-delete-message]");
     const deleteConfirm = document.querySelector("[data-delete-confirm]");
     const deleteCancelButtons = document.querySelectorAll("[data-delete-cancel]");
-    let pendingSubmitter = null;
+    let pendingAction = null;
 
-    function openDeleteModal(message, submitter) {
-      pendingSubmitter = submitter;
+    function openDeleteModal(message, action) {
+      pendingAction = action;
       if (deleteMessage) {
         deleteMessage.textContent = message || "删除后将无法恢复。";
       }
@@ -394,7 +440,7 @@
       if (deleteModal) {
         deleteModal.hidden = true;
       }
-      pendingSubmitter = null;
+      pendingAction = null;
     }
 
     if (selectAll) {
@@ -404,25 +450,31 @@
         });
       });
     }
-    form.addEventListener("submit", function (event) {
-      const submitter = event.submitter;
-      const message = submitter ? submitter.dataset.confirm : "";
-      if (message) {
+
+    form.querySelectorAll("button[data-confirm]").forEach(function (button) {
+      button.addEventListener("click", function (event) {
         event.preventDefault();
-        openDeleteModal(message, submitter);
-      }
+        const message = button.dataset.confirm;
+        const isBulk = !button.hasAttribute("formaction");
+        if (isBulk) {
+          const checked = form.querySelectorAll('input[name="user_ids"]:checked');
+          if (!checked.length) {
+            alert("请先勾选要删除的用户。");
+            return;
+          }
+        }
+        const action = button.hasAttribute("formaction")
+          ? button.getAttribute("formaction")
+          : form.getAttribute("action");
+        openDeleteModal(message, action);
+      });
     });
+
     if (deleteConfirm) {
       deleteConfirm.addEventListener("click", function () {
-        if (!pendingSubmitter) {
-          return;
-        }
-        if (pendingSubmitter.formAction) {
-          form.action = pendingSubmitter.formAction;
-        }
-        if (pendingSubmitter.formMethod) {
-          form.method = pendingSubmitter.formMethod;
-        }
+        if (!pendingAction) return;
+        form.action = pendingAction;
+        closeDeleteModal();
         form.submit();
       });
     }

@@ -5,7 +5,21 @@ from django.shortcuts import redirect, render
 from django.urls import path, reverse
 
 from .admin_views import default_batch, selected_batch
-from .models import AIMode, APIKey, ExperimentBatch, LLMProvider, SystemAPIConfig, Topic, TopicComment
+from .models import AIMode, APIKey, EnglishPaperConfig, ExperimentBatch, LLMProvider, SystemAPIConfig, Topic, TopicComment
+
+
+class EnglishPaperConfigInline(admin.StackedInline):
+    model = EnglishPaperConfig
+    extra = 0
+    min_num = 1
+    max_num = 1
+    can_delete = False
+    verbose_name = "英文论文配置"
+    verbose_name_plural = "英文论文配置"
+    fieldsets = (
+        ("入口说明页", {"fields": (("gate_title_zh", "gate_title_en"), "gate_body_zh", "gate_body_en", ("gate_cta_zh", "gate_cta_en"))}),
+        ("写作页", {"fields": (("title_zh", "title_en"), "intro_zh", "intro_en", "prompt", ("duration_minutes",))}),
+    )
 
 
 @admin.register(ExperimentBatch)
@@ -13,10 +27,10 @@ class ExperimentBatchAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active", "topic_count", "ai_chat_minutes", "created_at")
     list_filter = ("is_active",)
     search_fields = ("name",)
+    inlines = [EnglishPaperConfigInline]
     fieldsets = (
         ("基本信息", {"fields": ("name", "is_active")}),
         ("文案", {"fields": ("intro_zh", "intro_en", "outro_zh", "outro_en")}),
-        ("英文论文", {"fields": ("english_paper_prompt", "english_paper_duration_hours")}),
         ("实验参数", {"fields": ("ai_chat_minutes", "ai_neutrality", "topic_selection_strategy", "round_order_strategy")}),
     )
 
@@ -477,8 +491,11 @@ class LLMProviderAdmin(admin.ModelAdmin):
         ]
         return custom_urls + urls
 
-    def _renumber_priorities(self):
-        for index, provider in enumerate(LLMProvider.objects.order_by("priority", "id"), start=1):
+    def _renumber_priorities(self, kind=None):
+        qs = LLMProvider.objects.all()
+        if kind:
+            qs = qs.filter(kind=kind)
+        for index, provider in enumerate(qs.order_by("priority", "id"), start=1):
             if provider.priority != index:
                 provider.priority = index
                 provider.save(update_fields=["priority"])
@@ -486,12 +503,17 @@ class LLMProviderAdmin(admin.ModelAdmin):
     def move_provider(self, request, provider_id, direction):
         if request.method != "POST":
             return redirect("admin:experiments_llmprovider_changelist")
-        self._renumber_priorities()
-        providers = list(LLMProvider.objects.order_by("priority", "id"))
+        try:
+            target_provider = LLMProvider.objects.get(pk=provider_id)
+        except LLMProvider.DoesNotExist:
+            messages.error(request, "没有找到这个 LLM 供应商。")
+            return redirect("admin:experiments_llmprovider_changelist")
+        self._renumber_priorities(kind=target_provider.kind)
+        providers = list(LLMProvider.objects.filter(kind=target_provider.kind).order_by("priority", "id"))
         index = next((idx for idx, provider in enumerate(providers) if provider.pk == provider_id), None)
         if index is None:
             messages.error(request, "没有找到这个 LLM 供应商。")
-            return redirect("admin:experiments_llmprovider_changelist")
+            return redirect(f"{reverse('admin:experiments_llmprovider_changelist')}?kind={target_provider.kind}")
         target_index = index - 1 if direction == "up" else index + 1
         if 0 <= target_index < len(providers):
             current = providers[index]
@@ -500,7 +522,7 @@ class LLMProviderAdmin(admin.ModelAdmin):
             current.save(update_fields=["priority"])
             target.save(update_fields=["priority"])
             messages.success(request, "调用顺序已更新。")
-        return redirect("admin:experiments_llmprovider_changelist")
+        return redirect(f"{reverse('admin:experiments_llmprovider_changelist')}?kind={target_provider.kind}")
 
     def toggle_provider(self, request, provider_id):
         if request.method != "POST":
@@ -509,21 +531,59 @@ class LLMProviderAdmin(admin.ModelAdmin):
         provider.is_active = not provider.is_active
         provider.save(update_fields=["is_active"])
         messages.success(request, f"{provider.name} 已{'启用' if provider.is_active else '停用'}。")
-        return redirect("admin:experiments_llmprovider_changelist")
+        return redirect(f"{reverse('admin:experiments_llmprovider_changelist')}?kind={provider.kind}")
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        queryset = self.get_queryset(request).order_by("priority", "id")
+        kind = request.GET.get("kind", LLMProvider.KIND_CHAT)
+        if kind not in dict(LLMProvider.KIND_CHOICES):
+            kind = LLMProvider.KIND_CHAT
+        queryset = self.get_queryset(request).filter(kind=kind).order_by("priority", "id")
         extra_context["provider_rows"] = self.provider_rows(queryset)
-        extra_context["add_url"] = reverse("admin:experiments_llmprovider_add")
+        extra_context["add_url"] = f"{reverse('admin:experiments_llmprovider_add')}?kind={kind}"
+        extra_context["current_kind"] = kind
+        extra_context["kind_tabs"] = [
+            {
+                "value": value,
+                "label": label,
+                "url": f"{reverse('admin:experiments_llmprovider_changelist')}?kind={value}",
+                "active": value == kind,
+            }
+            for value, label in LLMProvider.KIND_CHOICES
+        ]
         return super().changelist_view(request, extra_context=extra_context)
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        kind = request.GET.get("kind")
+        if kind in dict(LLMProvider.KIND_CHOICES):
+            initial["kind"] = kind
+        return initial
 
     def save_model(self, request, obj, form, change):
         obj.name = self._unique_provider_name(obj.base_url, obj.pk)
         obj.is_active = True
         if not obj.priority:
             obj.priority = (LLMProvider.objects.exclude(pk=obj.pk).count() or 0) + 1
+        if not change:
+            kind = request.GET.get("kind")
+            if kind in dict(LLMProvider.KIND_CHOICES):
+                obj.kind = kind
         super().save_model(request, obj, form, change)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        response = super().response_add(request, obj, post_url_continue)
+        if hasattr(response, "url") and response.url and "kind=" not in response.url and "/change/" not in response.url:
+            sep = "&" if "?" in response.url else "?"
+            response["Location"] = f"{response.url}{sep}kind={obj.kind}"
+        return response
+
+    def response_change(self, request, obj):
+        response = super().response_change(request, obj)
+        if hasattr(response, "url") and response.url and "kind=" not in response.url and "/change/" not in response.url:
+            sep = "&" if "?" in response.url else "?"
+            response["Location"] = f"{response.url}{sep}kind={obj.kind}"
+        return response
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
@@ -603,6 +663,13 @@ class AIModeAdmin(admin.ModelAdmin):
             "fields": ("prompt_zh", "prompt_en"),
             "description": "定义AI的行为和回复风格"
         }),
+        ("开场说明模板", {
+            "fields": ("intro_template_zh", "intro_template_en"),
+            "description": (
+                "对话开始时，AI 会根据用户背景信息和此模板生成一段引导说明。"
+                "留空则不生成开场说明。"
+            ),
+        }),
     )
     formfield_overrides = {
         models.TextField: {"widget": forms.Textarea(attrs={"rows": 8, "cols": 80})},
@@ -650,6 +717,8 @@ class AIModeAdmin(admin.ModelAdmin):
                     name_en=mode.name_en,
                     prompt_zh=mode.prompt_zh,
                     prompt_en=mode.prompt_en,
+                    intro_template_zh=mode.intro_template_zh,
+                    intro_template_en=mode.intro_template_en,
                     position=mode.position,
                     is_enabled=mode.is_enabled,
                 )

@@ -3,6 +3,11 @@
   const saveButton = document.querySelector("[data-paper-save-draft]");
   const textarea = document.querySelector('textarea[name="paper_text"]');
   const status = document.querySelector("[data-paper-draft-status]");
+  const form = document.querySelector("[data-confirm-submit]");
+  const submitModal = document.querySelector("[data-submit-modal]");
+  const submitConfirm = document.querySelector("[data-submit-confirm]");
+  const submitCancelButtons = document.querySelectorAll("[data-submit-cancel]");
+  let allowSubmit = false;
 
   function twoDigits(number) {
     return String(Math.max(0, number)).padStart(2, "0");
@@ -38,6 +43,50 @@
     window.addEventListener("pageshow", render);
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) render();
+    });
+
+    // Auto-submit when deadline is reached
+    const autoTimer = window.setInterval(function () {
+      if (remaining <= 0) {
+        window.clearInterval(autoTimer);
+        allowSubmit = true;
+        if (form) {
+          const ta = form.querySelector("textarea");
+          if (ta && !ta.value.trim()) ta.value = " ";
+          form.submit();
+        }
+      }
+    }, 1000);
+  }
+
+  if (form && submitModal) {
+    form.addEventListener("submit", function (event) {
+      if (!allowSubmit) {
+        event.preventDefault();
+        submitModal.hidden = false;
+        document.body.classList.add("modal-open");
+        if (submitConfirm) submitConfirm.focus();
+      }
+    });
+    if (submitConfirm) {
+      submitConfirm.addEventListener("click", function () {
+        allowSubmit = true;
+        submitModal.hidden = true;
+        document.body.classList.remove("modal-open");
+        form.submit();
+      });
+    }
+    submitCancelButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        submitModal.hidden = true;
+        document.body.classList.remove("modal-open");
+      });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !submitModal.hidden) {
+        submitModal.hidden = true;
+        document.body.classList.remove("modal-open");
+      }
     });
   }
 
