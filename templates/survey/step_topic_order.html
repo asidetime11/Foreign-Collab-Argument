@@ -7,12 +7,12 @@
   <div class="task-hero">
     <div>
       <p class="step-label">{{ step_meta.label }}</p>
-      <h1>{{ step_meta.title }}</h1>
-      <p class="intro-text">{{ topic_order_intro|linebreaksbr }}</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_topic_order">{% if lang == 'en' %}{{ batch.step_title_topic_order_en }}{% else %}{{ batch.step_title_topic_order_zh }}{% endif %}</span></h1>
+      <div class="intro-text ui-copy ui-copy-multiline" data-copy-key="intro" data-copy-render="paragraphs">{% if lang == 'en' %}{% for para in batch.intro_en.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}{% else %}{% for para in batch.intro_zh.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}{% endif %}</div>
     </div>
   </div>
-  <p class="sort-direction">从上到下：最重要 → 最不重要</p>
-  <p class="drag-tip">拖动卡片可调整排序；拖到页面边缘会自动滚动，也可以用右侧按钮微调。</p>
+  <p class="sort-direction"><span class="ui-copy" data-copy-key="topic_order_direction">{% if lang == 'en' %}{{ batch.topic_order_direction_en }}{% else %}{{ batch.topic_order_direction_zh }}{% endif %}</span></p>
+  <p class="drag-tip"><span class="ui-copy" data-copy-key="topic_order_drag_tip">{% if lang == 'en' %}{{ batch.topic_order_drag_tip_en }}{% else %}{{ batch.topic_order_drag_tip_zh }}{% endif %}</span></p>
   <p class="drag-status" data-drag-status aria-live="polite"></p>
   <form method="post" class="task-form">
     {% csrf_token %}
@@ -42,10 +42,10 @@
       {% endfor %}
     </ol>
     <div class="sticky-submit">
-      <strong>提交后将进入下一站，排序不能返回修改。</strong>
-      <button class="primary" type="submit">确认排序</button>
+      <strong><span class="ui-copy" data-copy-key="topic_order_submit_warning">{% if lang == 'en' %}{{ batch.topic_order_submit_warning_en }}{% else %}{{ batch.topic_order_submit_warning_zh }}{% endif %}</span></strong>
+      <button class="primary" type="submit"><span class="ui-copy" data-copy-key="topic_order_submit_label">{% if lang == 'en' %}{{ batch.topic_order_submit_label_en }}{% else %}{{ batch.topic_order_submit_label_zh }}{% endif %}</span></button>
     </div>
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260518-2"></script>{% endblock %}
+{% block scripts %}{% if not preview_mode %}<script src="{% static 'survey/js/topic-order.js' %}?v=20260518-2"></script>{% endif %}{% endblock %}

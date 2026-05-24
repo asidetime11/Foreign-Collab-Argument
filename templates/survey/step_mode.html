@@ -5,8 +5,8 @@
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
     <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
-    <h1>{{ step_meta.title }}</h1>
-    <p class="intro-text">接下来可以选择一种方式和人工智能聊一聊，也可以跳过。</p>
+    <h1><span class="ui-copy" data-copy-key="step_title_mode">{% if lang == 'en' %}{{ batch.step_title_mode_en }}{% else %}{{ batch.step_title_mode_zh }}{% endif %}</span></h1>
+    <p class="intro-text"><span class="ui-copy" data-copy-key="mode_intro">{% if lang == 'en' %}{{ batch.mode_intro_en }}{% else %}{{ batch.mode_intro_zh }}{% endif %}</span></p>
   </div>
   <form method="post" class="mode-grid">
     {% csrf_token %}
@@ -16,15 +16,13 @@
           <strong>{{ mode.name_zh }}</strong>
           <span class="mode-tag">AI</span>
         </span>
-        <span class="mode-description">{{ mode.prompt_zh }}</span>
       </button>
     {% endfor %}
-    <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit">
+    <button class="mode-card skip-card" name="selected_mode" value="skip" type="submit" disabled aria-disabled="true" title="该选项暂时不可用">
       <span class="mode-card-head">
         <strong>跳过</strong>
-        <span class="mode-tag">直接继续</span>
+        <span class="mode-tag">暂不可用</span>
       </span>
-      <span class="mode-description">不使用人工智能，直接进入下一站。</span>
     </button>
   </form>
 </section>

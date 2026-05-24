@@ -22,13 +22,37 @@ def configured_providers():
     )
 
 
+def chat_providers():
+    from apps.experiments.models import LLMProvider
+
+    return list(
+        LLMProvider.objects.filter(
+            is_active=True, api_keys__is_active=True, kind=LLMProvider.KIND_CHAT
+        )
+        .distinct()
+        .order_by("priority", "id")
+    )
+
+
+def transcribe_providers():
+    from apps.experiments.models import LLMProvider
+
+    return list(
+        LLMProvider.objects.filter(
+            is_active=True, api_keys__is_active=True, kind=LLMProvider.KIND_TRANSCRIBE
+        )
+        .distinct()
+        .order_by("priority", "id")
+    )
+
+
 def ensure_ai_configured():
-    if not configured_providers():
+    if not chat_providers():
         raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
 
 
 def _default_provider():
-    providers = configured_providers()
+    providers = chat_providers()
     if not providers:
         raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
     return providers[0]
@@ -73,9 +97,11 @@ def _get_client_for_provider(provider=None, model_name=None):
 
 
 def _get_client_for_model(model_name):
-    providers = configured_providers()
+    providers = transcribe_providers()
     if not providers:
-        raise ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+        raise ImproperlyConfigured(
+            "请到后台「模型和 API」页面的「语音」分页配置语音转写供应商。"
+        )
 
     errors = []
     for provider in providers:
@@ -87,9 +113,8 @@ def _get_client_for_model(model_name):
 
     detail = "；".join(errors)
     raise ImproperlyConfigured(
-        f"转写模型 {model_name} 未在任何启用的 API Key 支持模型中配置。"
-        f"请到后台“模型和 API”页面，在对应 Key 的“支持模型”里添加 {model_name}，"
-        "或把 DEFAULT_TRANSCRIBE_MODEL 改成上游已支持的转写模型。"
+        f"转写模型 {model_name} 未在任何启用的语音供应商中配置。"
+        f"请到后台「模型和 API」→「语音」分页，在对应 Key 的“支持模型”里添加 {model_name}。"
         f"{' ' + detail if detail else ''}"
     )
 

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}英文论文写作{% endblock %}
+{% block content %}
+<section class="task-page task-page-english-paper-intro">
+  {% include "survey/partials/step_header.html" %}
+  <div class="consent-card">
+    <div class="consent-body">
+      <p class="step-label">{{ step_meta.label }}</p>
+      <h1><span class="ui-copy" data-copy-key="ep_gate_title">{% if lang == 'en' %}{{ gate_title_en }}{% else %}{{ gate_title_zh }}{% endif %}</span></h1>
+      <div class="intro-body-text">
+        <span class="ui-copy ui-copy-multiline" data-copy-key="ep_gate_body" data-copy-render="paragraphs">{% if lang == 'en' %}{% for para in gate_body_en.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}{% else %}{% for para in gate_body_zh.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}{% endif %}</span>
+      </div>
+    </div>
+    <form method="post" class="consent-actions">
+      {% csrf_token %}
+      <button class="primary" type="submit"><span class="ui-copy" data-copy-key="ep_gate_cta">{% if lang == 'en' %}{{ gate_cta_en }}{% else %}{{ gate_cta_zh }}{% endif %}</span></button>
+    </form>
+  </div>
+</section>
+{% endblock %}

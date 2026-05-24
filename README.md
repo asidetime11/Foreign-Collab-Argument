@@ -71,7 +71,16 @@ cp .env.example .env
 ```env
 DJANGO_SECRET_KEY=<随机长字符串>
 DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=<服务器IP或域名>
+DJANGO_ALLOWED_HOSTS=foreign-collab.com,www.foreign-collab.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://foreign-collab.com,https://www.foreign-collab.com
+DJANGO_SESSION_COOKIE_SECURE=1
+DJANGO_CSRF_COOKIE_SECURE=1
+```
+
+如果你暂时还没有配置 HTTPS 证书，可先将 `DJANGO_CSRF_TRUSTED_ORIGINS` 改成：
+
+```env
+DJANGO_CSRF_TRUSTED_ORIGINS=http://foreign-collab.com,http://www.foreign-collab.com
 ```
 
 **2. 构建并启动服务**
@@ -86,12 +95,32 @@ docker compose up -d --build
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py seed_defaults
 docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py check --deploy
 ```
 
 **3. 访问服务**
 
-- 参与者端：`http://<服务器IP>/survey/`
-- 管理后台：`http://<服务器IP>/admin/`
+- 参与者端：`http://foreign-collab.com/survey/`
+- 管理后台：`http://foreign-collab.com/admin/`
+
+### 域名上线检查
+
+- 确认 `foreign-collab.com` 和 `www.foreign-collab.com` 的 DNS A 记录都指向当前服务器公网 IP。
+- 确认服务器安全组 / 防火墙已放行 `80` 端口；若后续启用 HTTPS，还需放行 `443`。
+- 修改完配置后执行：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose restart nginx web
+```
+
+- 可使用以下命令验证响应头中的域名是否正确：
+
+```bash
+curl -I http://foreign-collab.com
+curl -I http://foreign-collab.com/admin/
+```
 
 ### 架构说明
 

@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -16,9 +17,10 @@ from openpyxl.utils import get_column_letter
 
 from apps.accounts.models import ParticipantProfile
 from apps.exports.services import build_all_users_csv
-from apps.survey.models import CommentReaction, ConversationMessage, EnglishPaperResponse, PostReaction, ScaleResponse, SurveySession, TextResponse
+from apps.survey.models import CommentReaction, ConversationMessage, EnglishPaperDraft, EnglishPaperResponse, PostReaction, QualityEvent, ScaleResponse, SurveySession, TextResponse, TopicRound
 
-from .models import AIMode, ExperimentBatch, Topic
+from .models import AIMode, EnglishPaperConfig, ExperimentBatch, ScaleItem, Topic
+from .ui_copy import UI_COPY_FIELDS, group_fields_by_step
 
 
 ROUND_TYPE_LABELS = {
@@ -339,17 +341,307 @@ def dashboard(request):
     return render(request, "admin/research/dashboard.html", context)
 
 
+@xframe_options_sameorigin
+@staff_member_required
+def copy_preview(request):
+    """Renders a participant-style page inline for the copy editor iframe.
+
+    Query params:
+      step: step key (e.g. consent, topic_order, post, ...)
+      lang: zh or en
+    Does NOT require a SurveySession; supplies fake context so templates render.
+    """
+    from types import SimpleNamespace
+    from django.utils.safestring import mark_safe
+
+    batch = selected_batch(request)
+    step = request.GET.get("step", "consent")
+    lang = "en" if request.GET.get("lang", "zh") == "en" else "zh"
+
+    STEP_META_PREVIEW = {
+        "consent": (1, "参与研究授权同意书", "consent", "survey/step_consent.html"),
+        "topic_order": (1, "先排一排你最在意的话题", "sort", "survey/step_topic_order.html"),
+        "post": (2, "阅读帖子与评论", "read", "survey/step_post.html"),
+        "emotion": (3, "当前感受", "mood", "survey/step_scale.html"),
+        "stance_before": (4, "你的观点", "stance", "survey/step_scale.html"),
+        "initial_text": (5, "写下你的想法", "text", "survey/step_text.html"),
+        "mode": (6, "选择对话模式", "mode", "survey/step_mode.html"),
+        "chat": (7, "与人工智能对话", "chat", "survey/step_chat.html"),
+        "ai_eval": (8, "对人工智能的评价", "ai_eval", "survey/step_scale.html"),
+        "stance_after": (9, "再次确认你的观点", "stance", "survey/step_scale.html"),
+        "final_text": (10, "写下你的新想法", "text", "survey/step_text.html"),
+        "english_paper_intro": (11, "英文论文写作入口", "text", "survey/step_english_paper_intro.html"),
+        "english_paper": (11, "英文论文写作", "text", "survey/step_english_paper.html"),
+        "done": (12, "已完成，感谢你的参与", "done", "survey/done.html"),
+    }
+    if step not in STEP_META_PREVIEW:
+        step = "consent"
+    number, title, kind, template = STEP_META_PREVIEW[step]
+    meta = {
+        "number": number,
+        "title": title,
+        "kind": kind,
+        "total": 12,
+        "label": f"第 {number} 站",
+        "route": range(1, 13),
+    }
+
+    context = {
+        "batch": batch,
+        "lang": lang,
+        "step": step,
+        "step_meta": meta,
+        "preview_mode": True,
+        "current_post_number": 1,
+        "total_posts": 2,
+    }
+
+    # Per-step extra fake context
+    if step == "topic_order":
+        context["topic_order_intro"] = batch.intro_zh if lang == "zh" else (batch.intro_en or batch.intro_zh)
+        context["topics"] = [
+            {"id": 1, "title": "示例话题（仅预览，请到话题页编辑）", "statement": ""},
+        ]
+        context["form"] = SimpleNamespace(ordered_topic_ids=mark_safe('<input type="hidden" name="ordered_topic_ids" value="1">'))
+    elif step == "post":
+        context["material"] = {
+            "title": "示例帖子标题（仅预览）",
+            "post_body": "示例帖子正文。在话题页编辑实际内容。",
+            "author": "示例作者",
+            "avatar_file": "avatar1.png",
+            "comments": [
+                {"id": 1, "body": "示例评论 1。", "author": "评论者 A", "avatar_file": "avatar2.png", "relative_time": "1 小时前"},
+                {"id": 2, "body": "示例评论 2。", "author": "评论者 B", "avatar_file": "avatar3.png", "relative_time": "刚刚"},
+            ],
+        }
+    elif step in {"emotion", "ai_eval"}:
+        # Use real ScaleItem rows so the inline editor can save back to DB.
+        item_type = ScaleItem.EMOTION if step == "emotion" else ScaleItem.AI_EVAL
+        real_items = list(batch.scale_items.filter(item_type=item_type).order_by("position", "id"))
+        if real_items:
+            for it in real_items:
+                # Inject `values` range used by template
+                max_v = it.max_value if step == "ai_eval" else 5
+                it.values = range(it.min_value, max_v + 1)
+                it.stance_role = None
+            items = real_items
+        else:
+            if step == "emotion":
+                items = [
+                    SimpleNamespace(pk=f"e{i}", label_zh=name, label_en=name, min_value=1, max_value=5, left_label_zh="", right_label_zh="", values=range(1, 6), item_type="emotion", stance_role=None)
+                    for i, name in enumerate(["好奇", "兴奋", "困惑"], start=1)
+                ]
+            else:
+                items = [
+                    SimpleNamespace(pk=f"a{i}", label_zh=name, label_en=name, min_value=1, max_value=7, left_label_zh="", right_label_zh="", values=range(1, 8), item_type="ai_eval", stance_role=None)
+                    for i, name in enumerate(["AI 回复有帮助", "AI 回复保持中立"], start=1)
+                ]
+        context["items"] = items
+        context["agreement_prompt"] = ""
+        context["confidence_prompt"] = ""
+        context["agreement_labels"] = []
+        context["confidence_labels"] = []
+        context["statement"] = ""
+    elif step in {"stance_before", "stance_after"}:
+        agreement_defaults = ["非常不同意", "不同意", "有点不同意", "有点同意", "同意", "非常同意"]
+        confidence_defaults = ["完全不确定", "不确定", "有点不确定", "有点确定", "确定", "非常确定"]
+        items = [
+            SimpleNamespace(pk="prev-a", label_zh="同意度", min_value=1, max_value=6, left_label_zh="", right_label_zh="", values=range(1, 7), item_type="stance", stance_role="agreement"),
+            SimpleNamespace(pk="prev-c", label_zh="确定度", min_value=1, max_value=6, left_label_zh="", right_label_zh="", values=range(1, 7), item_type="stance", stance_role="confidence"),
+        ]
+        context["items"] = items
+        context["agreement_prompt"] = '你有多大程度上同意"示例观点"这个观点？'
+        context["confidence_prompt"] = "你对自己上述的观点有多确定？"
+        context["agreement_labels"] = [getattr(batch, f"agreement_label_{i}", "") or agreement_defaults[i-1] for i in range(1, 7)]
+        context["confidence_labels"] = [getattr(batch, f"confidence_label_{i}", "") or confidence_defaults[i-1] for i in range(1, 7)]
+        context["statement"] = "示例观点"
+    elif step in {"initial_text", "final_text"}:
+        context["form"] = SimpleNamespace(
+            final_text=SimpleNamespace(value=lambda: ""),
+            input_method=mark_safe('<input type="hidden" name="input_method" value="keyboard">'),
+            transcribe_model=mark_safe('<input type="hidden" name="transcribe_model" value="">'),
+        )
+        context["material"] = None
+    elif step == "mode":
+        context["modes"] = [
+            SimpleNamespace(pk=1, name_zh="提出不同观点", prompt_zh="温和地提出一个不同角度。"),
+            SimpleNamespace(pk=2, name_zh="支持我的观点", prompt_zh="复述你的主要观点并补充支持理由。"),
+            SimpleNamespace(pk=3, name_zh="总结信息", prompt_zh="整理问题相关的不同信息和解释。"),
+        ]
+    elif step == "chat":
+        context["round"] = SimpleNamespace(pk=0)
+        context["minutes"] = batch.ai_chat_minutes
+        context["remaining_seconds"] = batch.ai_chat_minutes * 60
+        context["chat_messages"] = [
+            SimpleNamespace(role="participant", content="我觉得这个观点……", error_message="", was_interrupted=False),
+            SimpleNamespace(role="assistant", content="从另一个角度来看……", error_message="", was_interrupted=False, model_name=""),
+        ]
+    elif step == "english_paper_intro":
+        try:
+            ep_cfg = batch.english_paper_config
+        except EnglishPaperConfig.DoesNotExist:
+            ep_cfg = None
+        context["gate_title_zh"] = ep_cfg.gate_title_zh if ep_cfg else "即将进入写作模块"
+        context["gate_title_en"] = ep_cfg.gate_title_en if ep_cfg else "You're About to Enter the Writing Module"
+        context["gate_body_zh"] = ep_cfg.gate_body_zh if ep_cfg else '接下来你将进行英文论文写作。请放轻松，根据你对话题的理解，用英文写一篇论证性短文。计时将在你点击"进入写作"后开始。'
+        context["gate_body_en"] = ep_cfg.gate_body_en if ep_cfg else 'You will now write a short argumentative essay in English. Take a deep breath and relax. The timer will start after you click "Start Writing".'
+        context["gate_cta_zh"] = ep_cfg.gate_cta_zh if ep_cfg else "进入写作"
+        context["gate_cta_en"] = ep_cfg.gate_cta_en if ep_cfg else "Start Writing"
+    elif step == "english_paper":
+        try:
+            ep_cfg = batch.english_paper_config
+        except EnglishPaperConfig.DoesNotExist:
+            ep_cfg = None
+        context["title_zh"] = ep_cfg.title_zh if ep_cfg else "英文论文写作"
+        context["title_en"] = ep_cfg.title_en if ep_cfg else "English paper writing"
+        context["intro_zh"] = ep_cfg.intro_zh if ep_cfg else "请在规定时间内完成英文论文写作。"
+        context["intro_en"] = ep_cfg.intro_en if ep_cfg else "Please complete your English argumentative essay within the time limit."
+        context["prompt"] = ep_cfg.prompt if ep_cfg else batch.english_paper_prompt
+        duration_minutes = ep_cfg.duration_minutes if ep_cfg else int((batch.english_paper_duration_hours or 0.5) * 60)
+        context["remaining_seconds"] = duration_minutes * 60
+        context["deadline_at"] = 0
+        context["draft"] = None
+        context["form"] = SimpleNamespace(paper_text=SimpleNamespace(value=lambda: ""))
+        context["session"] = None
+    elif step == "done":
+        context["outro"] = batch.outro_zh if lang == "zh" else (batch.outro_en or batch.outro_zh)
+        context["request"] = None
+        context["session"] = None
+
+    return render(request, template, context)
+
+
 @staff_member_required
 def copy_settings(request):
     batch = selected_batch(request)
+    ui_field_bases = [base for base, *_ in UI_COPY_FIELDS]
+
     if request.method == "POST":
-        form = PageCopyForm(request.POST, instance=batch)
-        if form.is_valid():
-            form.save()
-            return redirect("research_admin_dashboard")
-    else:
-        form = PageCopyForm(instance=batch)
-    return render(request, "admin/research/copy_settings.html", {"title": "说明文字", "form": form, "batch": batch})
+        changed = []
+        scale_changed = 0
+        # Accept any field on ExperimentBatch ending in _zh or _en (whitelist by introspection).
+        valid_field_names = {f.name for f in ExperimentBatch._meta.get_fields() if hasattr(f, "name")}
+        for key in request.POST:
+            if key.startswith("ep_"):
+                continue  # handled separately below
+            if key.startswith("scale_item_"):
+                # scale_item_<id>_zh or scale_item_<id>_en
+                if not (key.endswith("_zh") or key.endswith("_en")):
+                    continue
+                lang_suffix = key[-3:]  # "_zh" or "_en"
+                try:
+                    item_id = int(key[len("scale_item_"):-3])
+                except ValueError:
+                    continue
+                try:
+                    item = ScaleItem.objects.get(pk=item_id, batch=batch)
+                except ScaleItem.DoesNotExist:
+                    continue
+                attr = "label_zh" if lang_suffix == "_zh" else "label_en"
+                new_value = request.POST.get(key, "")
+                if getattr(item, attr, "") != new_value:
+                    setattr(item, attr, new_value)
+                    item.save(update_fields=[attr])
+                    scale_changed += 1
+                continue
+            if not (key.endswith("_zh") or key.endswith("_en")):
+                continue
+            if key not in valid_field_names:
+                continue
+            new_value = request.POST.get(key, "")
+            if getattr(batch, key, "") != new_value:
+                setattr(batch, key, new_value)
+                changed.append(key)
+        if changed:
+            batch.save(update_fields=changed)
+
+        # Save EnglishPaperConfig fields (ep_* prefixed keys)
+        ep_changed = []
+        try:
+            ep_config = batch.english_paper_config
+        except EnglishPaperConfig.DoesNotExist:
+            ep_config = None
+        if ep_config:
+            ep_field_names = {f.name for f in EnglishPaperConfig._meta.get_fields() if hasattr(f, "name")}
+            for key in request.POST:
+                if not key.startswith("ep_"):
+                    continue
+                if not (key.endswith("_zh") or key.endswith("_en")):
+                    continue
+                field_name = key[3:]  # strip "ep_" prefix
+                new_value = request.POST.get(key, "")
+                if field_name in ep_field_names:
+                    if getattr(ep_config, field_name, "") != new_value:
+                        setattr(ep_config, field_name, new_value)
+                        ep_changed.append(field_name)
+                else:
+                    # Field without lang suffix (e.g. ep_prompt_zh → prompt)
+                    for suffix in ("_zh", "_en"):
+                        if field_name.endswith(suffix):
+                            base = field_name[: -len(suffix)]
+                            if base in ep_field_names and base not in ep_changed:
+                                if getattr(ep_config, base, "") != new_value:
+                                    setattr(ep_config, base, new_value)
+                                    ep_changed.append(base)
+                            break
+            if ep_changed:
+                ep_config.save(update_fields=ep_changed)
+
+        total_changed = len(changed) + len(ep_changed) + scale_changed
+        if total_changed:
+            messages.success(request, f"已保存 {total_changed} 处文案修改。")
+        else:
+            messages.info(request, "没有需要保存的改动。")
+        return redirect("research_admin_copy")
+
+    STEP_OPTIONS = []
+    STEP_DEFS = [
+        ("consent", 1),
+        ("topic_order", 1),
+        ("post", 2),
+        ("emotion", 3),
+        ("stance_before", 4),
+        ("initial_text", 5),
+        ("mode", 6),
+        ("chat", 7),
+        ("ai_eval", 8),
+        ("stance_after", 9),
+        ("final_text", 10),
+        ("english_paper_intro", 11),
+        ("english_paper", 11),
+        ("done", 12),
+    ]
+    for step_key, number in STEP_DEFS:
+        # Step title preference: consent uses consent_title; done uses done_title; others use step_title_<step>.
+        if step_key == "consent":
+            title = batch.consent_title_zh
+        elif step_key == "done":
+            title = batch.done_title_zh
+        elif step_key == "english_paper_intro":
+            try:
+                title = batch.english_paper_config.gate_title_zh or "英文写作入口页"
+            except EnglishPaperConfig.DoesNotExist:
+                title = "英文写作入口页"
+        elif step_key == "english_paper":
+            try:
+                title = batch.english_paper_config.title_zh or "英文论文写作"
+            except EnglishPaperConfig.DoesNotExist:
+                title = "英文论文写作"
+        else:
+            title = getattr(batch, f"step_title_{step_key}_zh", "")
+        STEP_OPTIONS.append((step_key, f"{number}. {title}"))
+    current_step = request.GET.get("step", "consent")
+    current_lang = "en" if request.GET.get("lang") == "en" else "zh"
+
+    context = {
+        "title": "界面文案",
+        "batch": batch,
+        "step_options": STEP_OPTIONS,
+        "current_step": current_step,
+        "current_lang": current_lang,
+        "preview_url_base": reverse("research_admin_copy_preview"),
+    }
+    return render(request, "admin/research/copy_settings.html", context)
 
 
 @staff_member_required
@@ -396,6 +688,7 @@ def user_records(request):
                 "completed_at": completed_at,
                 "paper_countdown": paper_countdown,
                 "can_delete": not profile.user.is_staff and not profile.user.is_superuser,
+                "is_tester": profile.is_tester,
             }
         )
     context = {
@@ -573,6 +866,21 @@ def delete_users(request):
         messages.success(request, f"已删除 {user_count} 个参与者账号。")
     else:
         messages.warning(request, "没有可删除的参与者账号。")
+    return redirect("research_admin_users")
+
+
+@staff_member_required
+@require_POST
+def reset_test_user(request, user_id):
+    user = get_object_or_404(User, pk=user_id, is_staff=False, is_superuser=False)
+    if not getattr(user.participant_profile, "is_tester", False):
+        messages.error(request, "只有测试账号才可以重置。")
+        return redirect("research_admin_users")
+    session = getattr(user, "survey_session", None)
+    if session:
+        session.delete()
+    QualityEvent.objects.filter(user=user).delete()
+    messages.success(request, f"已重置 {user.username} 的所有答题记录，可重新开始测试。")
     return redirect("research_admin_users")
 
 

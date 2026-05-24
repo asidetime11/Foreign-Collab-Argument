@@ -16,6 +16,16 @@
     return;
   }
 
+  function preferredMimeType() {
+    const candidates = ["audio/webm", "audio/mp4", "audio/ogg"];
+    for (const type of candidates) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return "";
+  }
+
+  const mimeType = preferredMimeType();
+
   let recorder = null;
   let activeButton = null;
   let chunks = [];
@@ -78,10 +88,11 @@
     button.classList.add("is-working");
     button.disabled = true;
     const bytes = chunks.reduce((total, chunk) => total + chunk.size, 0);
-    report("upload-start", `chunks=${chunks.length} bytes=${bytes}`);
+    report("upload-start", `chunks=${chunks.length} bytes=${bytes} mime=${mimeType}`);
 
+    const ext = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
     const data = new FormData();
-    data.append("audio", new Blob(chunks, { type: "audio/webm" }), "recording.webm");
+    data.append("audio", new Blob(chunks, { type: mimeType || "audio/webm" }), `recording.${ext}`);
     const response = await fetch("/ai/transcribe/", {
       method: "POST",
       headers: { "X-CSRFToken": csrfToken() },
@@ -132,7 +143,8 @@
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         report("microphone-opened", `tracks=${stream.getTracks().length}`);
-        recorder = new MediaRecorder(stream);
+        const recorderOptions = mimeType ? { mimeType } : {};
+        recorder = new MediaRecorder(stream, recorderOptions);
         activeButton = button;
         chunks = [];
 

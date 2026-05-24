@@ -5,6 +5,7 @@ from django.db import models
 class SurveySession(models.Model):
     STEP_TOPIC_ORDER = "topic_order"
     STEP_ROUND = "round"
+    STEP_ENGLISH_PAPER_INTRO = "english_paper_intro"
     STEP_ENGLISH_PAPER = "english_paper"
     STEP_DONE = "done"
 
@@ -18,6 +19,7 @@ class SurveySession(models.Model):
     round_order = models.JSONField("轮次顺序", default=list, blank=True)
     current_session_step = models.CharField("当前会话步骤", max_length=30, default=STEP_TOPIC_ORDER)
     current_round_index = models.PositiveIntegerField("当前轮次序号", default=0)
+    round_transition_acked = models.BooleanField("已确认过渡提示", default=True)
     batch_snapshot = models.JSONField("批次快照", default=dict)
     step_started_at = models.JSONField("步骤开始时间", default=dict, blank=True)
     step_submitted_at = models.JSONField("步骤提交时间", default=dict, blank=True)
@@ -103,6 +105,7 @@ class EnglishPaperResponse(models.Model):
     session = models.OneToOneField(SurveySession, on_delete=models.CASCADE, related_name="english_paper_response")
     prompt = models.TextField("论文要求")
     duration_hours = models.PositiveIntegerField("时长（小时）", default=24)
+    duration_minutes = models.PositiveIntegerField("时长（分钟）", default=0)
     paper_text = models.TextField("英文论文")
     submitted_at = models.DateTimeField("提交时间", auto_now_add=True)
 
@@ -111,6 +114,7 @@ class EnglishPaperDraft(models.Model):
     session = models.OneToOneField(SurveySession, on_delete=models.CASCADE, related_name="english_paper_draft")
     prompt = models.TextField("论文要求", blank=True)
     duration_hours = models.PositiveIntegerField("时长（小时）", default=24)
+    duration_minutes = models.PositiveIntegerField("时长（分钟）", default=0)
     paper_text = models.TextField("英文论文草稿", blank=True)
     saved_at = models.DateTimeField("暂存时间", auto_now=True)
 

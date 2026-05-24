@@ -17,10 +17,10 @@ from django.shortcuts import redirect
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.survey.models import ConversationMessage, TopicRound
+from apps.survey.models import ConversationMessage, ScaleResponse, TextResponse, TopicRound
 
-from .clients import AI_CONFIGURATION_ERROR, async_chat_stream, configured_providers, transcribe_audio
-from .prompts import build_system_prompt
+from .clients import AI_CONFIGURATION_ERROR, async_chat_stream, chat_providers, configured_providers, transcribe_audio
+from .prompts import build_intro_user_message, build_system_prompt
 
 
 logger = logging.getLogger(__name__)
@@ -60,11 +60,13 @@ def _friendly_transcribe_error(exc):
         )
     if "model_not_found" in message or "不存在" in message:
         return "语音转写失败：当前转写模型名称不可用，请检查后台模型配置。"
+    if "429" in message or "api_limit" in message or "负载已饱和" in message:
+        return "语音转写暂时失败，上游服务繁忙，请稍后重试。"
     return "语音转写失败，请检查转写模型或 API 分组是否支持 audio/transcriptions。"
 
 
 async def _async_chat_providers():
-    return await sync_to_async(configured_providers)()
+    return await sync_to_async(chat_providers)()
 
 
 async def _async_provider_display_model(provider):
@@ -232,6 +234,174 @@ async def chat(request, round_id):
     return response
 
 
+async def intro(request, round_id):
+    """Stream an AI-generated intro message at the start of a chat session.
+
+    Called automatically when the chat page loads with no prior messages.
+    The intro is generated once per round; subsequent calls return 204 No Content.
+    """
+    user = await request.auser()
+    if not user.is_authenticated:
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    try:
+        round_obj = await TopicRound.objects.select_related(
+            "session__batch", "session", "ai_mode"
+        ).aget(pk=round_id, session__user=user)
+    except TopicRound.DoesNotExist:
+        raise Http404
+
+    if round_obj.current_step != "chat" or not round_obj.ai_mode:
+        return HttpResponseBadRequest("round is not in chat step")
+
+    # Only generate intro if no assistant messages exist yet
+    already_started = await ConversationMessage.objects.filter(
+        round=round_obj, role="assistant"
+    ).aexists()
+    if already_started:
+        return HttpResponse(status=204)
+
+    mode = round_obj.ai_mode
+    if not (mode.intro_template_zh or mode.intro_template_en):
+        return HttpResponse(status=204)
+
+    language = round_obj.session.language
+
+    # Gather user context from DB
+    stance_scores = []
+    async for sr in ScaleResponse.objects.filter(round=round_obj, step="stance_before").order_by("id"):
+        stance_scores.append((sr.item_label, sr.selected_value, sr.min_value, sr.max_value))
+
+    initial_text_obj = await TextResponse.objects.filter(round=round_obj, step="initial_text").afirst()
+    initial_text = initial_text_obj.final_text if initial_text_obj else ""
+
+    intro_user_msg = build_intro_user_message(
+        mode,
+        round_obj.material_snapshot,
+        stance_scores,
+        initial_text,
+        language,
+    )
+    if not intro_user_msg:
+        return HttpResponse(status=204)
+
+    providers = await _async_chat_providers()
+    initial_model_name = await _async_provider_display_model(providers[0]) if providers else ""
+
+    messages = [
+        {
+            "role": "system",
+            "content": build_system_prompt(round_obj.session.batch, mode, language),
+        },
+        {"role": "user", "content": intro_user_msg},
+    ]
+
+    async def event_stream():
+        errors = []
+        if not providers:
+            errors.append(ImproperlyConfigured(AI_CONFIGURATION_ERROR))
+
+        for provider in providers:
+            model_name = await _async_provider_display_model(provider)
+            assistant_message = None
+            saved_at = 0
+
+            try:
+                gen = async_chat_stream(messages, provider=provider)
+                try:
+                    first = await gen.__anext__()
+                except StopAsyncIteration:
+                    first = None
+
+                if first is not None:
+                    model_name = getattr(provider, "_last_model_name", model_name)
+                    assistant_message = await ConversationMessage.objects.acreate(
+                        round=round_obj,
+                        role="assistant",
+                        content=first,
+                        language=language,
+                        ai_mode_name=mode.name_zh,
+                        model_name=model_name,
+                    )
+                    saved_at = time.monotonic()
+                    yield _sse_message(first)
+
+                async for chunk in gen:
+                    if not chunk:
+                        continue
+                    if assistant_message is None:
+                        model_name = getattr(provider, "_last_model_name", model_name)
+                        assistant_message = await ConversationMessage.objects.acreate(
+                            round=round_obj,
+                            role="assistant",
+                            content=chunk,
+                            language=language,
+                            ai_mode_name=mode.name_zh,
+                            model_name=model_name,
+                        )
+                        saved_at = time.monotonic()
+                    else:
+                        assistant_message.content += chunk
+                        now = time.monotonic()
+                        if now - saved_at >= 0.5:
+                            await ConversationMessage.objects.filter(pk=assistant_message.pk).aupdate(
+                                content=assistant_message.content
+                            )
+                            saved_at = now
+                    yield _sse_message(chunk)
+            except Exception as exc:
+                errors.append(exc)
+                if assistant_message is not None:
+                    assistant_message.error_message = str(exc)
+                    await ConversationMessage.objects.filter(pk=assistant_message.pk).aupdate(
+                        content=assistant_message.content,
+                        error_message=assistant_message.error_message,
+                    )
+                    yield _sse_message(_friendly_chat_error(exc), event="error")
+                    return
+                continue
+
+            model_name = getattr(provider, "_last_model_name", model_name)
+            if assistant_message is None:
+                await ConversationMessage.objects.acreate(
+                    round=round_obj,
+                    role="assistant",
+                    content="",
+                    language=language,
+                    ai_mode_name=mode.name_zh,
+                    model_name=model_name,
+                )
+            else:
+                assistant_message.model_name = model_name
+                await ConversationMessage.objects.filter(pk=assistant_message.pk).aupdate(
+                    content=assistant_message.content,
+                    model_name=model_name,
+                )
+            yield _sse_message("ok", event="done")
+            return
+
+        exc = errors[-1] if errors else ImproperlyConfigured(AI_CONFIGURATION_ERROR)
+        friendly_message = _friendly_chat_error(exc)
+        await ConversationMessage.objects.acreate(
+            round=round_obj,
+            role="assistant",
+            content="",
+            language=language,
+            ai_mode_name=mode.name_zh,
+            model_name=initial_model_name,
+            error_message=str(exc),
+        )
+        yield _sse_message(friendly_message, event="error")
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
+
+
 @login_required
 @require_POST
 def transcribe_debug(request):
@@ -307,7 +477,7 @@ def interrupt_chat(request, round_id):
     if ConversationMessage.objects.filter(round=round_obj, role="assistant", was_interrupted=True).exists():
         return JsonResponse({"ok": True})
 
-    providers = configured_providers()
+    providers = chat_providers()
     model_name = ""
     if providers:
         key = providers[0].api_keys.filter(is_active=True).order_by("usage_count", "id").first()

@@ -6,14 +6,22 @@
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
     <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
-    <h1>{{ step_meta.title }}</h1>
-    {% if statement %}<p class="statement-card">{{ statement }}</p>{% endif %}
     {% if step == "emotion" %}
-      <p class="intro-text">像调音台一样标出你现在的感受。每一项都需要选择。</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_emotion">{% if lang == 'en' %}{{ batch.step_title_emotion_en }}{% else %}{{ batch.step_title_emotion_zh }}{% endif %}</span></h1>
     {% elif step == "ai_eval" %}
-      <p class="intro-text">给刚才的对话伙伴打几个标签。每一项都需要选择。</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_ai_eval">{% if lang == 'en' %}{{ batch.step_title_ai_eval_en }}{% else %}{{ batch.step_title_ai_eval_zh }}{% endif %}</span></h1>
     {% elif step == "stance_after" %}
-      <p class="intro-text">前面的回答已收起，请根据现在的想法重新选择。</p>
+      <h1><span class="ui-copy" data-copy-key="step_title_stance_after">{% if lang == 'en' %}{{ batch.step_title_stance_after_en }}{% else %}{{ batch.step_title_stance_after_zh }}{% endif %}</span></h1>
+    {% else %}
+      <h1><span class="ui-copy" data-copy-key="step_title_stance_before">{% if lang == 'en' %}{{ batch.step_title_stance_before_en }}{% else %}{{ batch.step_title_stance_before_zh }}{% endif %}</span></h1>
+    {% endif %}
+    {% if step == "emotion" %}
+      <p class="intro-text"><span class="ui-copy" data-copy-key="emotion_intro">{% if lang == 'en' %}{{ batch.emotion_intro_en }}{% else %}{{ batch.emotion_intro_zh }}{% endif %}</span></p>
+    {% elif step == "ai_eval" %}
+      <p class="intro-text"><span class="ui-copy" data-copy-key="ai_eval_intro">{% if lang == 'en' %}{{ batch.ai_eval_intro_en }}{% else %}{{ batch.ai_eval_intro_zh }}{% endif %}</span></p>
+    {% elif step == "stance_after" %}
+      <p class="intro-text"><span class="ui-copy" data-copy-key="stance_after_intro">{% if lang == 'en' %}{{ batch.stance_after_intro_en }}{% else %}{{ batch.stance_after_intro_zh }}{% endif %}</span></p>
+    {% elif step == "stance_before" %}
     {% else %}
       <p class="intro-text">请根据当前想法完成下面两个判断。</p>
     {% endif %}
@@ -21,19 +29,29 @@
   <form method="post" class="task-form rating-form">
     {% csrf_token %}
     {% for item in items %}
-      <div class="scale-question" data-scale-id="{{ item.pk }}">
+      <div class="scale-question{% if step == 'stance_before' or step == 'stance_after' %} stance-question{% endif %}" data-scale-id="{{ item.pk }}">
         <div class="scale-card">
-          <div class="scale-card-head">
-            <label class="scale-label">{{ item.label_zh }}</label>
-            <span class="scale-value-pill"><span data-scale-value>{{ item.min_value }}</span> / {{ item.max_value }}</span>
-          </div>
+
+          {% if step == "stance_before" or step == "stance_after" %}
+            {% if item.stance_role == "agreement" %}
+              <p class="stance-question-text">{{ agreement_prompt }}</p>
+            {% else %}
+              <p class="stance-question-text">{{ confidence_prompt }}</p>
+            {% endif %}
+          {% else %}
+            <div class="scale-card-head">
+              <label class="scale-label">{% if step == "emotion" or step == "ai_eval" %}<span class="ui-copy" data-copy-key="scale_item_{{ item.pk }}">{% if lang == 'en' %}{{ item.label_en|default:item.label_zh }}{% else %}{{ item.label_zh }}{% endif %}</span>{% else %}{{ item.label_zh }}{% endif %}</label>
+              <span class="scale-value-pill"><span data-scale-value>{{ item.min_value }}</span> / {{ item.max_value }}</span>
+            </div>
+          {% endif %}
 
           <div class="slider-container">
-            <!-- Left/Right text labels -->
+            {% if item.left_label_zh or item.right_label_zh %}
             <div class="slider-labels">
               <span class="label-left">{{ item.left_label_zh }}</span>
               <span class="label-right">{{ item.right_label_zh }}</span>
             </div>
+            {% endif %}
 
             <!-- Slider input -->
             <div class="slider-wrapper">
@@ -52,12 +70,28 @@
               >
             </div>
 
-            <!-- Fixed number labels -->
-            <div class="slider-numbers">
+            <!-- Number labels (hidden for emotion step; shown once at bottom) -->
+            {% if step == "stance_before" or step == "stance_after" %}
+              {% if item.stance_role == "agreement" %}
+                <div class="stance-scale-labels">
+                  {% for label in agreement_labels %}
+                  <div class="stance-stop"><span class="number-label" data-value="{{ forloop.counter }}">{{ forloop.counter }}</span><span class="stance-scale-text">{{ label }}</span></div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="stance-scale-labels">
+                  {% for label in confidence_labels %}
+                  <div class="stance-stop"><span class="number-label" data-value="{{ forloop.counter }}">{{ forloop.counter }}</span><span class="stance-scale-text">{{ label }}</span></div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% else %}
+            <div class="slider-numbers{% if step == 'emotion' %} slider-numbers-hidden{% endif %}">
               {% for value in item.values %}
               <span class="number-label" data-value="{{ value }}">{{ value }}</span>
               {% endfor %}
             </div>
+            {% endif %}
           </div>
 
           <!-- Hidden input for form submission -->
@@ -65,6 +99,17 @@
         </div>
       </div>
     {% endfor %}
+
+    {% if step == "emotion" %}
+    <div class="emotion-scale-legend" aria-hidden="true">
+      <span class="legend-item"><span class="legend-num">1</span><span class="legend-text"><span class="ui-copy" data-copy-key="emotion_legend_1">{% if lang == 'en' %}{{ batch.emotion_legend_1_en }}{% else %}{{ batch.emotion_legend_1_zh }}{% endif %}</span></span></span>
+      <span class="legend-item"><span class="legend-num">2</span><span class="legend-text"><span class="ui-copy" data-copy-key="emotion_legend_2">{% if lang == 'en' %}{{ batch.emotion_legend_2_en }}{% else %}{{ batch.emotion_legend_2_zh }}{% endif %}</span></span></span>
+      <span class="legend-item"><span class="legend-num">3</span><span class="legend-text"><span class="ui-copy" data-copy-key="emotion_legend_3">{% if lang == 'en' %}{{ batch.emotion_legend_3_en }}{% else %}{{ batch.emotion_legend_3_zh }}{% endif %}</span></span></span>
+      <span class="legend-item"><span class="legend-num">4</span><span class="legend-text"><span class="ui-copy" data-copy-key="emotion_legend_4">{% if lang == 'en' %}{{ batch.emotion_legend_4_en }}{% else %}{{ batch.emotion_legend_4_zh }}{% endif %}</span></span></span>
+      <span class="legend-item"><span class="legend-num">5</span><span class="legend-text"><span class="ui-copy" data-copy-key="emotion_legend_5">{% if lang == 'en' %}{{ batch.emotion_legend_5_en }}{% else %}{{ batch.emotion_legend_5_zh }}{% endif %}</span></span></span>
+    </div>
+    {% endif %}
+
     <p class="soft-alert" role="status" aria-live="polite" hidden>请先完成所有滑杆，再继续。</p>
     <div class="sticky-submit">
       <strong>每一项都选择后才能继续。</strong>
@@ -73,4 +118,4 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/rating.js' %}?v=20260516-4"></script>{% endblock %}
+{% block scripts %}{% if not preview_mode %}<script src="{% static 'survey/js/rating.js' %}?v=20260520-1"></script>{% endif %}{% endblock %}

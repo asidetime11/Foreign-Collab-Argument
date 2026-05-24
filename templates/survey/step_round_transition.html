@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}进入下一个话题{% endblock %}
+{% block content %}
+<section class="task-page task-page-round-transition">
+  {% include "survey/partials/step_header.html" %}
+  <div class="consent-card">
+    <div class="consent-body">
+      <p class="step-label">{{ step_meta.label }}</p>
+      <h1>进入下一个话题</h1>
+      <div class="consent-copy" style="font-size: 20px; line-height: 1.8;">
+        <p>你已经完成第 {{ completed_number }} 个话题的讨论，接下来将开启第 {{ next_number }} 个话题的讨论。</p>
+        <p>休息一下，准备好后点击下方按钮开始。</p>
+      </div>
+    </div>
+    <form method="post" class="consent-actions">
+      {% csrf_token %}
+      <button class="primary" type="submit">开始下一个话题</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

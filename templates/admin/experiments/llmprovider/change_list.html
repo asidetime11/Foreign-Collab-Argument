@@ -10,12 +10,18 @@
       <div class="llm-admin-head">
         <div>
           <h1>模型和 API</h1>
-          <p>只需要维护模型、URL 和 API Key。AI 对话会从第一行开始依次尝试，前面的配置异常时自动切到后面的配置。</p>
+          <p>「大模型」用于 AI 对话，「语音」用于把录音转成文字。两种用途互相独立、各自按顺序调用。</p>
         </div>
-        {% if provider_rows %}
-          <a class="llm-primary-action" href="{{ add_url }}">新增供应商</a>
-        {% endif %}
+        <a class="llm-primary-action" href="{{ add_url }}">新增供应商</a>
       </div>
+
+      {% if kind_tabs %}
+        <div class="llm-kind-tabs" role="tablist">
+          {% for tab in kind_tabs %}
+            <a class="llm-kind-tab{% if tab.active %} is-active{% endif %}" href="{{ tab.url }}" role="tab" aria-selected="{% if tab.active %}true{% else %}false{% endif %}">{{ tab.label }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
 
       {% if provider_rows %}
         <div class="llm-admin-summary" aria-label="调用规则">
@@ -67,8 +73,8 @@
         <div class="llm-empty-state">
           <div class="llm-empty-mark" aria-hidden="true">API</div>
           <div class="llm-empty-copy">
-            <h2>还没有配置供应商</h2>
-            <p>新增一条 URL 后，可以在下面添加多组模型和 API Key。配置完成后，AI 对话会按这里的顺序稳定调用。</p>
+            <h2>{% if current_kind == 'transcribe' %}还没有配置语音供应商{% else %}还没有配置大模型供应商{% endif %}</h2>
+            <p>新增一条 URL 后，可以在下面添加多组模型和 API Key。{% if current_kind == 'transcribe' %}请配置 whisper-1 等转写模型。{% else %}请配置 GPT/Claude/豆包等对话模型。{% endif %}</p>
           </div>
           <div class="llm-empty-steps" aria-label="配置步骤">
             <span><b>1</b>填写 URL</span>

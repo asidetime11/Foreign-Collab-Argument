@@ -2,6 +2,8 @@ import hashlib
 
 from django.db import models
 
+from .ui_copy import UI_COPY_FIELDS
+
 
 class ExperimentBatch(models.Model):
     TOPIC_STRATEGY_HIGHEST_LOWEST = "highest_lowest"
@@ -24,6 +26,18 @@ class ExperimentBatch(models.Model):
     round_order_strategy = models.CharField("轮次顺序策略", max_length=40, default=ROUND_RANDOM)
     ai_neutrality = models.CharField("AI 中立性", max_length=40, default=NEUTRALITY_MODERATE)
     ai_chat_minutes = models.PositiveIntegerField("AI 对话时长（分钟）", default=5)
+    agreement_label_1 = models.CharField("同意度刻度 1", max_length=60, blank=True, default="非常不同意")
+    agreement_label_2 = models.CharField("同意度刻度 2", max_length=60, blank=True, default="不同意")
+    agreement_label_3 = models.CharField("同意度刻度 3", max_length=60, blank=True, default="有点不同意")
+    agreement_label_4 = models.CharField("同意度刻度 4", max_length=60, blank=True, default="有点同意")
+    agreement_label_5 = models.CharField("同意度刻度 5", max_length=60, blank=True, default="同意")
+    agreement_label_6 = models.CharField("同意度刻度 6", max_length=60, blank=True, default="非常同意")
+    confidence_label_1 = models.CharField("确定度刻度 1", max_length=60, blank=True, default="完全不确定")
+    confidence_label_2 = models.CharField("确定度刻度 2", max_length=60, blank=True, default="不确定")
+    confidence_label_3 = models.CharField("确定度刻度 3", max_length=60, blank=True, default="有点不确定")
+    confidence_label_4 = models.CharField("确定度刻度 4", max_length=60, blank=True, default="有点确定")
+    confidence_label_5 = models.CharField("确定度刻度 5", max_length=60, blank=True, default="确定")
+    confidence_label_6 = models.CharField("确定度刻度 6", max_length=60, blank=True, default="非常确定")
     export_settings = models.JSONField("导出设置", default=dict, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
@@ -33,6 +47,65 @@ class ExperimentBatch(models.Model):
 
     def __str__(self):
         return self.name
+
+
+for _base, _zh_label, _zh_default, _en_default, _step, _hint in UI_COPY_FIELDS:
+    ExperimentBatch.add_to_class(
+        f"{_base}_zh",
+        models.TextField(f"{_zh_label}（中文）", blank=True, default=_zh_default),
+    )
+    ExperimentBatch.add_to_class(
+        f"{_base}_en",
+        models.TextField(f"{_zh_label}（英文）", blank=True, default=_en_default),
+    )
+
+
+class EnglishPaperConfig(models.Model):
+    batch = models.OneToOneField(
+        ExperimentBatch,
+        on_delete=models.CASCADE,
+        related_name="english_paper_config",
+        verbose_name="实验批次",
+    )
+    title_zh = models.CharField("标题（中文）", max_length=200, default="英文论文写作")
+    title_en = models.CharField("标题（英文）", max_length=200, default="English paper writing")
+    intro_zh = models.TextField(
+        "说明文字（中文）",
+        default="请在规定时间内完成英文论文写作。",
+        blank=True,
+        help_text="显示在标题下方的引导说明。",
+    )
+    intro_en = models.TextField(
+        "说明文字（英文）",
+        default="Please complete your English argumentative essay within the time limit.",
+        blank=True,
+    )
+    prompt = models.TextField(
+        "英文论文要求",
+        default="Write an English argumentative essay based on the discussion you completed.",
+    )
+    duration_minutes = models.PositiveIntegerField("时长（分钟）", default=30)
+    gate_title_zh = models.CharField("入口页标题（中文）", max_length=200, default="即将进入写作模块")
+    gate_title_en = models.CharField("入口页标题（英文）", max_length=200, default="You're About to Enter the Writing Module")
+    gate_body_zh = models.TextField(
+        "入口页说明（中文）",
+        default='接下来你将进行英文论文写作。请放轻松，根据你对话题的理解，用英文写一篇论证性短文。计时将在你点击"进入写作"后开始。',
+        blank=True,
+    )
+    gate_body_en = models.TextField(
+        "入口页说明（英文）",
+        default='You will now write a short argumentative essay in English. Take a deep breath and relax. The timer will start after you click "Start Writing".',
+        blank=True,
+    )
+    gate_cta_zh = models.CharField("入口按钮文字（中文）", max_length=100, default="进入写作")
+    gate_cta_en = models.CharField("入口按钮文字（英文）", max_length=100, default="Start Writing")
+
+    class Meta:
+        verbose_name = "英文论文配置"
+        verbose_name_plural = "英文论文配置"
+
+    def __str__(self):
+        return f"英文论文配置 — {self.batch.name}"
 
 
 class Topic(models.Model):
@@ -51,6 +124,26 @@ class Topic(models.Model):
     post_body_en = models.TextField("帖子正文（英文）", blank=True)
     statement_zh = models.TextField("观点陈述（中文）", blank=True)
     statement_en = models.TextField("观点陈述（英文）", blank=True)
+    agreement_prompt_zh = models.TextField(
+        "同意度提问（中文）",
+        blank=True,
+        help_text='打分页面"你的观点/再次确认你的观点"中第一题的提问文字。',
+    )
+    agreement_prompt_en = models.TextField(
+        "同意度提问（英文）",
+        blank=True,
+        help_text="English version of the agreement prompt.",
+    )
+    confidence_prompt_zh = models.TextField(
+        "确定度提问（中文）",
+        blank=True,
+        help_text="打分页面中第二题的提问文字。",
+    )
+    confidence_prompt_en = models.TextField(
+        "确定度提问（英文）",
+        blank=True,
+        help_text="English version of the confidence prompt.",
+    )
 
     class Meta:
         ordering = ["position", "id"]
@@ -69,6 +162,10 @@ class Topic(models.Model):
             "post_body_en": self.post_body_en,
             "statement_zh": self.statement_zh,
             "statement_en": self.statement_en,
+            "agreement_prompt_zh": self.agreement_prompt_zh,
+            "agreement_prompt_en": self.agreement_prompt_en,
+            "confidence_prompt_zh": self.confidence_prompt_zh,
+            "confidence_prompt_en": self.confidence_prompt_en,
             "comments": [comment.snapshot() for comment in self.comments.all()],
         }
 
@@ -160,6 +257,16 @@ class AIMode(models.Model):
     name_en = models.CharField("模式名称（英文）", max_length=120, blank=True)
     prompt_zh = models.TextField("提示词（中文）")
     prompt_en = models.TextField("提示词（英文）", blank=True)
+    intro_template_zh = models.TextField(
+        "开场说明模板（中文）",
+        blank=True,
+        help_text="对话开始时 AI 根据用户观点生成的引导说明。留空则不生成开场说明。",
+    )
+    intro_template_en = models.TextField(
+        "开场说明模板（英文）",
+        blank=True,
+        help_text="English version of the intro template shown at the start of chat.",
+    )
     position = models.PositiveIntegerField("排序", default=0)
     is_enabled = models.BooleanField("启用", default=True)
 
@@ -209,7 +316,12 @@ class SystemAPIConfig(models.Model):
 
 class LLMProvider(models.Model):
     """LLM模型提供商配置"""
+    KIND_CHAT = "chat"
+    KIND_TRANSCRIBE = "transcribe"
+    KIND_CHOICES = [(KIND_CHAT, "大模型"), (KIND_TRANSCRIBE, "语音转写")]
+
     name = models.CharField("提供商名称", max_length=120, unique=True, help_text="例如: GPT-4, Claude, Qwen等")
+    kind = models.CharField("用途", max_length=20, choices=KIND_CHOICES, default=KIND_CHAT, help_text="大模型用于 AI 对话，语音转写用于把录音转成文字。")
     model_name = models.CharField("模型名称", max_length=200, help_text="调用API时使用的模型标识，例如: gpt-4, claude-3-opus")
     base_url = models.URLField("API Base URL", help_text="模型API的基础URL")
     priority = models.PositiveIntegerField("调用顺序", default=0, help_text="数字越小越优先调用")

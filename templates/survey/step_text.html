@@ -5,14 +5,27 @@
 <section class="task-page task-page-text">
   {% include "survey/partials/step_header.html" %}
   <div class="task-hero compact">
-    <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
-    <h1>{{ step_meta.title }}</h1>
-    {% if step == "final_text" %}
-      <p class="intro-text">请再次写下你现在的想法，可以和之前相同，也可以不同。</p>
-    {% else %}
-      <p class="intro-text">把你现在想到的写下来就好，不需要标准答案。</p>
-    {% endif %}
+    <div>
+      <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
+      {% if step == "final_text" %}
+        <h1><span class="ui-copy" data-copy-key="step_title_final_text">{% if lang == 'en' %}{{ batch.step_title_final_text_en }}{% else %}{{ batch.step_title_final_text_zh }}{% endif %}</span></h1>
+      {% else %}
+        <h1><span class="ui-copy" data-copy-key="step_title_initial_text">{% if lang == 'en' %}{{ batch.step_title_initial_text_en }}{% else %}{{ batch.step_title_initial_text_zh }}{% endif %}</span></h1>
+      {% endif %}
+      {% if step == "final_text" %}
+        <p class="intro-text"><span class="ui-copy" data-copy-key="text_final_hint">{% if lang == 'en' %}{{ batch.text_final_hint_en }}{% else %}{{ batch.text_final_hint_zh }}{% endif %}</span></p>
+      {% else %}
+        <p class="intro-text"><span class="ui-copy" data-copy-key="text_initial_hint">{% if lang == 'en' %}{{ batch.text_initial_hint_en }}{% else %}{{ batch.text_initial_hint_zh }}{% endif %}</span></p>
+      {% endif %}
+    </div>
+    <div class="paper-countdown">
+      <span class="paper-countdown-label">剩余时间</span>
+      <strong data-text-countdown data-remaining="{{ remaining_seconds|default_if_none:300 }}">--:--</strong>
+    </div>
   </div>
+  {% if material %}
+    {% include "survey/partials/material_readonly.html" %}
+  {% endif %}
   <form method="post" class="task-form note-form">
     {% csrf_token %}
     <div class="thought-note">
@@ -27,4 +40,31 @@
   </form>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>{% endblock %}
+{% block scripts %}{% if not preview_mode %}<script src="{% static 'survey/js/recorder.js' %}?v=20260523-3"></script>
+<script>
+(function() {
+  var el = document.querySelector('[data-text-countdown]');
+  var form = document.querySelector('.note-form');
+  if (!el || !form) return;
+  var raw = parseInt(el.getAttribute('data-remaining'), 10);
+  var remaining = isNaN(raw) ? 300 : raw;
+  function fmt(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+  el.textContent = fmt(remaining);
+  if (remaining <= 0) {
+    var ta = form.querySelector('textarea');
+    if (ta && !ta.value.trim()) ta.value = ' ';
+    form.submit();
+    return;
+  }
+  var t = window.setInterval(function() {
+    remaining -= 1;
+    el.textContent = fmt(Math.max(remaining, 0));
+    if (remaining <= 0) {
+      window.clearInterval(t);
+      var ta = form.querySelector('textarea');
+      if (ta && !ta.value.trim()) ta.value = ' ';
+      form.submit();
+    }
+  }, 1000);
+})();
+</script>{% endif %}{% endblock %}

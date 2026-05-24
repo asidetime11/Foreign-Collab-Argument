@@ -18,6 +18,7 @@ class ParticipantProfile(models.Model):
     education_or_work = models.CharField("教育阶段/职业状态", max_length=120, blank=True)
     contact = models.CharField("联系方式", max_length=120, blank=True)
     notes = models.TextField("备注", blank=True)
+    is_tester = models.BooleanField("测试账号", default=False, help_text="测试账号可在后台一键重置答题记录，不计入正式数据。")
     batch = models.ForeignKey(
         "experiments.ExperimentBatch",
         on_delete=models.SET_NULL,

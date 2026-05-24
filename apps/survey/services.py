@@ -12,6 +12,7 @@ STEP_RESEARCH_CONSENT = "consent"
 RESEARCH_CONSENT_KEY = "research_consent"
 ROUND_STEPS = ["post", "emotion", "stance_before", "initial_text", "mode", "chat", "ai_eval", "stance_after", "final_text"]
 SESSION_DONE = "done"
+STEP_ROUND_TRANSITION = "round_transition"
 
 
 def has_research_consent(session: SurveySession):
@@ -44,7 +45,7 @@ def get_or_create_session(user, language="zh-hans"):
 
 
 def _batch_snapshot(batch: ExperimentBatch):
-    return {
+    snapshot = {
         "id": batch.pk,
         "name": batch.name,
         "intro_zh": batch.intro_zh,
@@ -56,6 +57,10 @@ def _batch_snapshot(batch: ExperimentBatch):
         "english_paper_prompt": batch.english_paper_prompt,
         "english_paper_duration_hours": batch.english_paper_duration_hours,
     }
+    for i in range(1, 7):
+        snapshot[f"agreement_label_{i}"] = getattr(batch, f"agreement_label_{i}", "")
+        snapshot[f"confidence_label_{i}"] = getattr(batch, f"confidence_label_{i}", "")
+    return snapshot
 
 
 def _topic_snapshots(batch: ExperimentBatch):
@@ -112,12 +117,22 @@ def current_step(session: SurveySession):
         return SESSION_DONE
     if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER:
         return SurveySession.STEP_ENGLISH_PAPER
+    if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER_INTRO:
+        return SurveySession.STEP_ENGLISH_PAPER_INTRO
     if session.current_session_step == STEP_TOPIC_ORDER:
         if not has_research_consent(session):
             return STEP_RESEARCH_CONSENT
         return STEP_TOPIC_ORDER
     round_obj = current_round(session)
-    return round_obj.current_step if round_obj else SESSION_DONE
+    if round_obj is None:
+        return SESSION_DONE
+    if (
+        session.current_round_index > 0
+        and not session.round_transition_acked
+        and round_obj.current_step == ROUND_STEPS[0]
+    ):
+        return STEP_ROUND_TRANSITION
+    return round_obj.current_step
 
 
 def start_current_step(session: SurveySession):
@@ -132,6 +147,10 @@ def start_current_step(session: SurveySession):
         return
     if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER:
         session.step_started_at.setdefault(SurveySession.STEP_ENGLISH_PAPER, now)
+        session.save(update_fields=["step_started_at"])
+        return
+    if session.current_session_step == SurveySession.STEP_ENGLISH_PAPER_INTRO:
+        session.step_started_at.setdefault(SurveySession.STEP_ENGLISH_PAPER_INTRO, now)
         session.save(update_fields=["step_started_at"])
         return
     round_obj = current_round(session)
@@ -171,17 +190,29 @@ def _complete_round(round_obj: TopicRound):
     session = round_obj.session
     next_index = session.current_round_index + 1
     if next_index >= session.rounds.count():
-        session.current_session_step = SurveySession.STEP_ENGLISH_PAPER
-        session.step_started_at.setdefault(SurveySession.STEP_ENGLISH_PAPER, timezone.now().isoformat())
+        session.current_session_step = SurveySession.STEP_ENGLISH_PAPER_INTRO
     else:
         session.current_round_index = next_index
+        session.round_transition_acked = False
     session.save()
+
+
+def acknowledge_round_transition(session: SurveySession):
+    if not session.round_transition_acked:
+        session.round_transition_acked = True
+        session.save(update_fields=["round_transition_acked"])
 
 
 def complete_english_paper(session: SurveySession):
     session.current_session_step = SurveySession.STEP_DONE
     session.completed_at = timezone.now()
     session.save(update_fields=["current_session_step", "completed_at"])
+
+
+def complete_english_paper_intro(session: SurveySession):
+    session.current_session_step = SurveySession.STEP_ENGLISH_PAPER
+    session.step_started_at[SurveySession.STEP_ENGLISH_PAPER] = timezone.now().isoformat()
+    session.save(update_fields=["current_session_step", "step_started_at"])
 
 
 def scale_items_for_step(batch, step):

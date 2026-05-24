@@ -1,16 +1,21 @@
 {% extends "base.html" %}
-{% block title %}参与研究授权同意书{% endblock %}
+{% load static %}
+{% block title %}{{ batch.consent_title_zh }}{% endblock %}
 {% block content %}
 <section class="task-page task-page-consent">
   {% include "survey/partials/step_header.html" %}
   <div class="consent-card">
     <div class="consent-body">
       <p class="step-label">{{ step_meta.label }}</p>
-      <h1>参与研究授权同意书</h1>
-      <div class="consent-copy">
-        <p>欢迎参与本研究。本平台会记录你在任务中的排序、文字回答、量表选择、与 AI 的对话内容以及英文论文，用于后续学术研究分析。</p>
-        <p>你的回答仅用于研究目的，数据会尽量以匿名方式整理。参与过程中请按照自己的真实想法作答；如果遇到不适或不想继续，可以停止参与并联系研究人员。</p>
-        <p>点击同意表示你已了解本研究的基本内容，并自愿继续完成后续任务。</p>
+      <h1><span class="ui-copy" data-copy-key="consent_title">{% if lang == 'en' %}{{ batch.consent_title_en }}{% else %}{{ batch.consent_title_zh }}{% endif %}</span></h1>
+      <div class="consent-copy ui-copy ui-copy-multiline" data-copy-key="consent_body" data-copy-render="paragraphs">
+        {% with body=batch.consent_body_en|default_if_none:"" %}
+        {% if lang == 'en' %}
+          {% for para in batch.consent_body_en.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}
+        {% else %}
+          {% for para in batch.consent_body_zh.splitlines %}{% if para %}<p>{{ para }}</p>{% endif %}{% endfor %}
+        {% endif %}
+        {% endwith %}
       </div>
     </div>
     {% if error %}<p class="consent-error">{{ error }}</p>{% endif %}
@@ -19,10 +24,10 @@
       <label class="consent-check">
         <input type="checkbox" name="agree" required>
         <span class="consent-checkmark" aria-hidden="true"></span>
-        <span>我已阅读并同意参与本研究</span>
+        <span class="ui-copy" data-copy-key="consent_agree_label">{% if lang == 'en' %}{{ batch.consent_agree_label_en }}{% else %}{{ batch.consent_agree_label_zh }}{% endif %}</span>
       </label>
       <div class="consent-submit-row">
-        <button class="primary" type="submit">同意并进入下一步</button>
+        <button class="primary" type="submit"><span class="ui-copy" data-copy-key="consent_submit_label">{% if lang == 'en' %}{{ batch.consent_submit_label_en }}{% else %}{{ batch.consent_submit_label_zh }}{% endif %}</span></button>
       </div>
     </form>
   </div>

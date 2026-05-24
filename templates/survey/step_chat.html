@@ -2,12 +2,12 @@
 {% load static %}
 {% block title %}与人工智能对话{% endblock %}
 {% block content %}
-<section class="task-page task-page-chat chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}" data-remaining-seconds="{{ remaining_seconds }}">
+<section class="task-page task-page-chat chat" data-round-id="{{ round.pk }}" data-minutes="{{ minutes }}" data-remaining-seconds="{{ remaining_seconds }}"{% if needs_intro %} data-needs-intro="true"{% endif %}>
   {% include "survey/partials/step_header.html" %}
   <div class="chat-head">
     <div>
       <p class="step-label">{% include "survey/partials/round_step_label.html" %}</p>
-      <h1>{{ step_meta.title }}</h1>
+      <h1><span class="ui-copy" data-copy-key="step_title_chat">{% if lang == 'en' %}{{ batch.step_title_chat_en }}{% else %}{{ batch.step_title_chat_zh }}{% endif %}</span></h1>
     </div>
     <div class="timer">剩余时间 <strong data-countdown>{{ minutes }}:00</strong></div>
   </div>
@@ -23,18 +23,19 @@
   <div class="chat-compose">
     <form id="chat-form" class="chat-input-row">
       {% csrf_token %}
-      <input name="message" autocomplete="off" data-no-paste="true" placeholder="直接输入你想聊的内容">
+      <input name="message" autocomplete="off" data-no-paste="true" placeholder="{% if lang == 'en' %}{{ batch.chat_input_placeholder_en }}{% else %}{{ batch.chat_input_placeholder_zh }}{% endif %}">
       <button type="button" class="ghost voice-button" data-recorder data-recorder-target='input[name="message"]'>语音输入</button>
       <button type="button" class="ghost stop-reply-button" data-stop-reply hidden disabled>暂停回复</button>
-      <button type="submit">发送</button>
+      <button type="submit"><span class="ui-copy" data-copy-key="chat_send_label">{% if lang == 'en' %}{{ batch.chat_send_label_en }}{% else %}{{ batch.chat_send_label_zh }}{% endif %}</span></button>
     </form>
     <form method="post" class="chat-finish" data-confirm-finish>{% csrf_token %}<button class="finish-button" type="submit">完成这轮对话</button></form>
   </div>
-  <div class="finish-modal" data-finish-modal hidden>
-    <div class="finish-modal-backdrop" data-finish-cancel></div>
+  <div class="finish-modal{% if preview_mode %} finish-modal-flat{% endif %}"{% if not preview_mode %} data-finish-modal hidden{% endif %}>
+    {% if not preview_mode %}<div class="finish-modal-backdrop" data-finish-cancel></div>{% endif %}
     <section class="finish-modal-panel" role="dialog" aria-modal="true" aria-labelledby="finish-modal-title">
-      <h2 id="finish-modal-title">确认完成这轮对话吗？</h2>
-      <p>提交后将进入下一步，不能继续本轮 AI 对话。</p>
+      {% if preview_mode %}<p style="margin:0 0 8px;color:#6a737d;font-size:12px;">（结束对话弹窗预览）</p>{% endif %}
+      <h2 id="finish-modal-title"><span class="ui-copy" data-copy-key="chat_finish_modal_title">{% if lang == 'en' %}{{ batch.chat_finish_modal_title_en }}{% else %}{{ batch.chat_finish_modal_title_zh }}{% endif %}</span></h2>
+      <p><span class="ui-copy" data-copy-key="chat_finish_modal_body">{% if lang == 'en' %}{{ batch.chat_finish_modal_body_en }}{% else %}{{ batch.chat_finish_modal_body_zh }}{% endif %}</span></p>
       <div class="finish-modal-actions">
         <button type="button" class="ghost" data-finish-cancel>取消</button>
         <button type="button" class="primary" data-finish-confirm>确认完成</button>
@@ -44,6 +45,8 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="{% static 'survey/js/recorder.js' %}?v=20260518-8"></script>
-<script src="{% static 'survey/js/chat.js' %}?v=20260518-1"></script>
+{% if not preview_mode %}
+<script src="{% static 'survey/js/recorder.js' %}?v=20260523-3"></script>
+<script src="{% static 'survey/js/chat.js' %}?v=20260523-3"></script>
+{% endif %}
 {% endblock %}

@@ -6,9 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}协同论证平台{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'survey/css/site.css' %}?v=20260518-4">
+  <link rel="stylesheet" href="{% static 'survey/css/site.css' %}?v=20260523-4">
 </head>
-<body>
+<body{% if preview_mode %} class="copy-preview"{% endif %}>
+  {% if not preview_mode %}
   <header class="topbar">
     <a class="brand" href="{% url 'survey:start' %}">
       <span class="brand-text">协同论证平台</span>
@@ -22,6 +23,7 @@
       {% endif %}
     </nav>
   </header>
+  {% endif %}
   <main class="shell">
     {% if messages %}
       <div class="message-stack" aria-live="polite">
@@ -30,7 +32,12 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% if not preview_mode %}
   <script src="{% static 'survey/js/quality-events.js' %}?v=20260518-1"></script>
+  {% endif %}
+  {% if preview_mode %}
+  <script src="{% static 'admin/js/copy_editor_iframe.js' %}?v=20260520-11"></script>
+  {% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>
